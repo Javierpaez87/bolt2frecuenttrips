@@ -160,6 +160,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           tripData.publishDaysBefore || 0
         );
 
+        // ✅ Crear batch correctamente
         const batch = writeBatch(db);
         const createdTrips: Trip[] = [];
 
@@ -225,11 +226,11 @@ export const useTripStore = create<TripState>((set, get) => ({
           },
         };
 
-        const tripRef = doc(db, 'Post Trips', tripId);
-        await batch.set(tripRef, fullTrip);
+        // ✅ Para viajes individuales, usar addDoc directamente
+        const docRef = await addDoc(collection(db, 'Post Trips'), fullTrip);
 
         const trip: Trip = {
-          id: tripId,
+          id: docRef.id,
           ...fullTrip,
           departureDate: departureDateTimestamp.toDate(),
           createdAt: new Date(),
@@ -399,6 +400,11 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
+      // ✅ Verificar que user.uid no sea undefined antes de usarlo en where()
+      if (!user.uid) {
+        throw new Error('UID de usuario no disponible');
+      }
+
       const tripsQuery = query(collection(db, 'Post Trips'), where('driverId', '==', user.uid));
       const tripsSnapshot = await getDocs(tripsQuery);
 
@@ -415,14 +421,16 @@ export const useTripStore = create<TripState>((set, get) => ({
           let passengerInfo = { name: '', phone: '' };
 
           try {
-            const passengerRef = doc(db, 'users', bookingData.passengerId);
-            const passengerSnap = await getDoc(passengerRef);
-            if (passengerSnap.exists()) {
-              const passengerData = passengerSnap.data();
-              passengerInfo = {
-                name: passengerData.name || '',
-                phone: passengerData.phone || '',
-              };
+            if (bookingData.passengerId) {
+              const passengerRef = doc(db, 'users', bookingData.passengerId);
+              const passengerSnap = await getDoc(passengerRef);
+              if (passengerSnap.exists()) {
+                const passengerData = passengerSnap.data();
+                passengerInfo = {
+                  name: passengerData.name || '',
+                  phone: passengerData.phone || '',
+                };
+              }
             }
           } catch (e) {
             console.error('Error obteniendo datos del pasajero:', e);

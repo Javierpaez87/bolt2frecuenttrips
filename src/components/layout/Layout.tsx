@@ -30,7 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const db = getFirestore();
 
     const fetchNotifications = async () => {
-      if (!isAuthenticated || !user) return;
+      if (!isAuthenticated || !user || !user.uid) return;
 
       try {
         // Conductor: check for pending bookings
