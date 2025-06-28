@@ -23,6 +23,7 @@ import {
   convertDateToTimestamp,
   getNextTripDate,
   generateRecurringTripDates,
+  processFirestoreTrip,
 } from '../utils/recurringTrips';
 
 interface TripState {
@@ -46,44 +47,6 @@ interface TripState {
   deleteTrip: (tripId: string) => Promise<void>;
   deleteRecurringGroup: (recurrenceId: string) => Promise<void>;
 }
-
-// Función helper para procesar datos de viaje desde Firestore
-const processFirestoreTrip = (doc: any, data: DocumentData): Trip | null => {
-  try {
-    let departureDate: Date;
-
-    if (data.departureDate) {
-      if (typeof data.departureDate.toDate === 'function') {
-        departureDate = data.departureDate.toDate();
-      } else if (typeof data.departureDate === 'string') {
-        departureDate = createLocalDate(data.departureDate);
-      } else if (data.departureDate instanceof Date) {
-        departureDate = data.departureDate;
-      } else {
-        console.warn('Formato de fecha no reconocido:', data.departureDate);
-        return null;
-      }
-    } else {
-      console.warn('No se encontró departureDate en el documento:', doc.id);
-      return null;
-    }
-
-    return {
-      id: doc.id,
-      ...data,
-      departureDate,
-      createdAt: data.createdAt?.toDate?.() || new Date(),
-      driver: {
-        ...data.driver,
-        phone: data.driver?.phone || '',
-        profilePicture: data.driver?.profilePicture || '',
-      },
-    } as Trip;
-  } catch (error) {
-    console.error('Error procesando viaje:', error, data);
-    return null;
-  }
-};
 
 // Función para procesar grupos recurrentes
 const processRecurringGroup = (trips: Trip[]): RecurringTripGroup[] => {
@@ -160,7 +123,11 @@ export const useTripStore = create<TripState>((set, get) => ({
           tripData.publishDaysBefore || 0
         );
 
-        // ✅ Crear batch correctamente
+        if (dates.length === 0) {
+          throw new Error('No se generaron fechas válidas para el viaje recurrente');
+        }
+
+        // Crear batch correctamente
         const batch = writeBatch(db);
         const createdTrips: Trip[] = [];
 
@@ -207,7 +174,6 @@ export const useTripStore = create<TripState>((set, get) => ({
         return createdTrips[0]; // Retornar el primer viaje creado
       } else {
         // Crear viaje individual
-        const tripId = generateTripId();
         const departureDateTimestamp = convertDateToTimestamp(tripData.departureDate);
 
         const fullTrip = {
@@ -226,7 +192,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           },
         };
 
-        // ✅ Para viajes individuales, usar addDoc directamente
+        // Para viajes individuales, usar addDoc directamente
         const docRef = await addDoc(collection(db, 'Post Trips'), fullTrip);
 
         const trip: Trip = {
@@ -246,6 +212,7 @@ export const useTripStore = create<TripState>((set, get) => ({
         return trip;
       }
     } catch (error) {
+      console.error('❌ Error al crear viaje:', error);
       set({
         error: error instanceof Error ? error.message : 'Error al crear viaje',
         isLoading: false,
@@ -300,6 +267,7 @@ export const useTripStore = create<TripState>((set, get) => ({
         isLoading: false 
       });
     } catch (error) {
+      console.error('Error al obtener viajes:', error);
       set({
         error: error instanceof Error ? error.message : 'Error al obtener viajes',
         isLoading: false,
@@ -330,6 +298,7 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       set({ myTrips, myRecurringGroups, isLoading: false });
     } catch (error) {
+      console.error('Error al obtener mis viajes:', error);
       set({
         error: error instanceof Error ? error.message : 'Error al obtener mis viajes',
         isLoading: false,
@@ -400,7 +369,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
-      // ✅ Verificar que user.uid no sea undefined antes de usarlo en where()
+      // Verificar que user.uid no sea undefined antes de usarlo en where()
       if (!user.uid) {
         throw new Error('UID de usuario no disponible');
       }
@@ -447,6 +416,7 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       set({ myBookings: allBookings, isLoading: false });
     } catch (error) {
+      console.error('Error al obtener reservas de mis viajes:', error);
       set({
         error: error instanceof Error ? error.message : 'Error al obtener reservas de mis viajes',
         isLoading: false,

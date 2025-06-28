@@ -32,12 +32,18 @@ const TripCard: React.FC<TripCardProps> = ({
       
       if (typeof date === 'string') {
         // Si es string en formato YYYY-MM-DD, parsearlo como fecha local
-        const [year, month, day] = date.split('-').map(Number);
-        dateObj = new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
+        const parts = date.split('-');
+        if (parts.length === 3) {
+          const [year, month, day] = parts.map(Number);
+          dateObj = new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
+        } else {
+          console.warn('Formato de fecha string no reconocido:', date);
+          return 'Fecha inválida';
+        }
       } else if (date instanceof Date) {
         dateObj = date;
       } else {
-        console.warn('Formato de fecha no reconocido:', date);
+        console.warn('Tipo de fecha no reconocido:', typeof date, date);
         return 'Fecha inválida';
       }
 
