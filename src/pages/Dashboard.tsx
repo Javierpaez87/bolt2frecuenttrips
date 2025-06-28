@@ -1,14 +1,12 @@
-// Este archivo contiene la lógica completa del dashboard con control de pestañas,
-// y ahora también con manejo de errores si una reserva no tiene viaje asociado.
-
 import React, { useEffect, useState } from 'react';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { Navigate, useSearchParams, Link } from 'react-router-dom';
-import { Car, Bookmark, User } from 'lucide-react';
+import { Car, Bookmark, User, Repeat } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Layout from '../components/layout/Layout';
 import TripCard from '../components/trip/TripCard';
+import RecurringTripCard from '../components/trip/RecurringTripCard';
 import PendingBookings from '../components/PendingBookings';
 import { useTripStore } from '../store/tripStore';
 import { useAuthStore } from '../store/authStore';
@@ -55,12 +53,14 @@ const Dashboard: React.FC = () => {
   const {
     myTrips,
     myBookings,
+    myRecurringGroups,
     isLoading,
     error,
     fetchMyTrips,
     fetchMyBookings,
     fetchBookingsForMyTrips,
     deleteTrip,
+    deleteRecurringGroup,
   } = useTripStore();
 
   const [activeTab, setActiveTab] = useState<'trips' | 'bookings' | 'received' | 'profile'>('trips');
@@ -102,7 +102,29 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleDeleteRecurringGroup = async (recurrenceId: string) => {
+    const confirmDelete = window.confirm(
+      '¿Estás seguro de que querés eliminar TODA la serie de viajes recurrentes? Esta acción no se puede deshacer.'
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteRecurringGroup(recurrenceId);
+      toast.success('Serie de viajes recurrentes eliminada con éxito');
+    } catch (error) {
+      toast.error('Ocurrió un error al eliminar la serie de viajes');
+    }
+  };
+
   const getReservationStatus = (booking: Booking) => booking.status;
+
+  // Filtrar viajes individuales (no recurrentes)
+  const individualTrips = myTrips.filter(trip => !trip.isRecurring);
+  const futureIndividualTrips = individualTrips.filter(trip => isTodayOrFuture(trip.departureDate));
+  const pastIndividualTrips = individualTrips.filter(trip => isPast(trip.departureDate));
+
+  // Filtrar grupos recurrentes activos
+  const activeRecurringGroups = myRecurringGroups.filter(group => group.status === 'active');
 
   return (
     <Layout>
@@ -178,31 +200,53 @@ const Dashboard: React.FC = () => {
                     Viajes que has publicado
                   </h2>
 
-                  {/* FUTUROS */}
-                  {myTrips.filter(trip => isTodayOrFuture(trip.departureDate)).length > 0 ? (
+                  {/* VIAJES RECURRENTES ACTIVOS */}
+                  {activeRecurringGroups.length > 0 && (
                     <>
-                      <h3 className="text-md font-semibold mb-2">Próximos viajes publicados</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {myTrips
-                          .filter(trip => isTodayOrFuture(trip.departureDate))
-                          .map(trip => (
-                            <div key={trip.id} className="relative">
-                              <TripCard
-                                trip={trip}
-                                hideConductorInfo={true}
-                              />
-                              <button
-                                onClick={() => handleDeleteTrip(trip.id)}
-                                className="absolute top-2 right-2 text-sm bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded shadow"
-                              >
-                                Eliminar
-                              </button>
-                            </div>
-                          ))}
+                      <div className="flex items-center mb-4">
+                        <Repeat className="h-5 w-5 text-blue-500 mr-2" />
+                        <h3 className="text-lg font-semibold text-gray-800">Viajes Recurrentes</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        {activeRecurringGroups.map(group => (
+                          <RecurringTripCard
+                            key={group.id}
+                            group={group}
+                            hideConductorInfo={true}
+                            showDeleteButton={true}
+                            onDelete={handleDeleteRecurringGroup}
+                          />
+                        ))}
                       </div>
                     </>
-                  ) : (
-                    <div className="bg-white rounded-lg shadow-card p-8 text-center">
+                  )}
+
+                  {/* VIAJES INDIVIDUALES FUTUROS */}
+                  {futureIndividualTrips.length > 0 ? (
+                    <>
+                      <h3 className="text-md font-semibold mb-2">Próximos viajes individuales</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        {futureIndividualTrips.map(trip => (
+                          <div key={trip.id} className="relative">
+                            <TripCard
+                              trip={trip}
+                              hideConductorInfo={true}
+                            />
+                            <button
+                              onClick={() => handleDeleteTrip(trip.id)}
+                              className="absolute top-2 right-2 text-sm bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded shadow"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {/* MENSAJE SI NO HAY VIAJES ACTIVOS */}
+                  {futureIndividualTrips.length === 0 && activeRecurringGroups.length === 0 && (
+                    <div className="bg-white rounded-lg shadow-card p-8 text-center mb-8">
                       <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">
                         No tienes viajes activos
@@ -219,26 +263,24 @@ const Dashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {/* PASADOS */}
-                  {myTrips.filter(trip => isPast(trip.departureDate)).length > 0 ? (
+                  {/* HISTORIAL DE VIAJES PASADOS */}
+                  {pastIndividualTrips.length > 0 && (
                     <>
                       <h3 className="text-md font-semibold mt-8 mb-2 text-gray-600">Historial de viajes pasados</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {myTrips
-                          .filter(trip => isPast(trip.departureDate))
-                          .map(trip => (
-                            <div key={trip.id} className="relative">
-                              <TripCard
-                                trip={trip}
-                                hideConductorInfo={true}
-                                isPast={true}
-                                reservationCount={trip.bookings?.length || 0}
-                              />
-                            </div>
-                          ))}
+                        {pastIndividualTrips.map(trip => (
+                          <div key={trip.id} className="relative">
+                            <TripCard
+                              trip={trip}
+                              hideConductorInfo={true}
+                              isPast={true}
+                              reservationCount={trip.bookings?.length || 0}
+                            />
+                          </div>
+                        ))}
                       </div>
                     </>
-                  ) : null}
+                  )}
                 </div>
               )}
 

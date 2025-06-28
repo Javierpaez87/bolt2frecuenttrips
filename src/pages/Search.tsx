@@ -3,9 +3,10 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import TripFilter from '../components/trip/TripFilter';
 import TripCard from '../components/trip/TripCard';
+import RecurringTripCard from '../components/trip/RecurringTripCard';
 import BookingModal from '../components/trip/BookingModal';
 import { useTripStore } from '../store/tripStore';
-import { Trip, TripFilters } from '../types';
+import { Trip, TripFilters, RecurringTripGroup } from '../types';
 import { useAuthStore } from '../store/authStore';
 
 const Search: React.FC = () => {
@@ -15,6 +16,7 @@ const Search: React.FC = () => {
   const {
     trips,
     filteredTrips,
+    recurringGroups,
     isLoading,
     error,
     fetchTrips,
@@ -23,6 +25,7 @@ const Search: React.FC = () => {
   } = useTripStore();
 
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [selectedRecurringGroup, setSelectedRecurringGroup] = useState<RecurringTripGroup | null>(null);
 
   useEffect(() => {
     fetchTrips();
@@ -47,7 +50,7 @@ const Search: React.FC = () => {
 
   const handleBookTrip = (trip: Trip) => {
     if (!isAuthenticated) {
-navigate('/login?scrollToForm=true');
+      navigate('/login?scrollToForm=true');
       return;
     }
 
@@ -64,6 +67,35 @@ navigate('/login?scrollToForm=true');
     setSelectedTrip(trip);
   };
 
+  const handleBookRecurringTrip = (group: RecurringTripGroup) => {
+    if (!isAuthenticated) {
+      navigate('/login?scrollToForm=true');
+      return;
+    }
+
+    if (!user?.phone || user.phone.trim() === '') {
+      const confirmRedirect = window.confirm(
+        'Necesitás cargar un número de teléfono para poder reservar. ¿Querés ir a tu perfil ahora?'
+      );
+      if (confirmRedirect) {
+        navigate('/profile/edit?from=booking');
+      }
+      return;
+    }
+
+    // Para viajes recurrentes, necesitamos encontrar el próximo viaje específico
+    const nextTrip = trips.find(trip => 
+      trip.recurrenceId === group.id && 
+      trip.departureDate.toDateString() === group.nextTripDate.toDateString()
+    );
+
+    if (nextTrip) {
+      setSelectedTrip(nextTrip);
+    } else {
+      alert('No se pudo encontrar el próximo viaje disponible para reservar.');
+    }
+  };
+
   const handleConfirmBooking = async (tripId: string, seats: number) => {
     try {
       await bookTrip(tripId, seats);
@@ -74,6 +106,22 @@ navigate('/login?scrollToForm=true');
       alert('Ocurrió un error al reservar');
     }
   };
+
+  // Separar viajes individuales y recurrentes para mostrar
+  const individualTrips = filteredTrips.filter(trip => !trip.isRecurring);
+  const recurringTripsToShow = recurringGroups.filter(group => {
+    // Aplicar filtros a los grupos recurrentes
+    const matchesOrigin = searchParams.get('origin') 
+      ? group.origin.toLowerCase().includes(searchParams.get('origin')!.toLowerCase())
+      : true;
+    const matchesDestination = searchParams.get('destination')
+      ? group.destination.toLowerCase().includes(searchParams.get('destination')!.toLowerCase())
+      : true;
+    
+    return matchesOrigin && matchesDestination && group.status === 'active';
+  });
+
+  const totalResults = individualTrips.length + recurringTripsToShow.length;
 
   return (
     <Layout>
@@ -89,7 +137,7 @@ navigate('/login?scrollToForm=true');
             <h2 className="text-xl font-semibold text-gray-900">
               {isLoading
                 ? 'Cargando viajes...'
-                : `${filteredTrips.filter((t) => t.availableSeats > 0).length} viajes encontrados`}
+                : `${totalResults} viajes encontrados`}
             </h2>
           </div>
 
@@ -104,18 +152,53 @@ navigate('/login?scrollToForm=true');
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTrips.filter((trip) => trip.availableSeats > 0).length > 0 ? (
-                filteredTrips
-                  .filter((trip) => trip.availableSeats > 0)
-                  .map((trip) => (
-                    <TripCard
-                      key={trip.id}
-                      trip={trip}
-                      onBook={handleBookTrip}
-                    />
-                  ))
-              ) : (
+            <div className="space-y-6">
+              {/* Viajes Recurrentes */}
+              {recurringTripsToShow.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm mr-2">
+                      Recurrentes
+                    </span>
+                    Viajes que se repiten semanalmente
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {recurringTripsToShow.map((group) => (
+                      <RecurringTripCard
+                        key={group.id}
+                        group={group}
+                        onBook={handleBookRecurringTrip}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Viajes Individuales */}
+              {individualTrips.length > 0 && (
+                <div>
+                  {recurringTripsToShow.length > 0 && (
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">
+                        Individuales
+                      </span>
+                      Viajes de una sola vez
+                    </h3>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {individualTrips.map((trip) => (
+                      <TripCard
+                        key={trip.id}
+                        trip={trip}
+                        onBook={handleBookTrip}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mensaje cuando no hay resultados */}
+              {totalResults === 0 && (
                 <div className="col-span-3 text-center py-12">
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     No se encontraron viajes

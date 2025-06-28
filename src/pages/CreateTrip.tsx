@@ -27,18 +27,19 @@ interface CreateTripFormData {
 
   // Campos para viaje recurrente
   isRecurring?: boolean;
-  recurrenceDays?: string[]; // ej: ['martes', 'jueves']
-  recurrenceStartDate?: string; // fecha en formato YYYY-MM-DD
-  recurrenceEndDate?: string;   // opcional
-  publishDaysBefore?: number;   // cuántos días antes se publican los viajes
+  recurrenceDays?: string[];
+  recurrenceStartDate?: string;
+  recurrenceEndDate?: string;
+  publishDaysBefore?: number;
 }
+
 const CreateTrip: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { createTrip, isLoading, error } = useTripStore();
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateTripFormData>();
   const [isRecurring, setIsRecurring] = useState(false);
-const [recurrenceDays, setRecurrenceDays] = useState<string[]>([]);
+  const [recurrenceDays, setRecurrenceDays] = useState<string[]>([]);
   const [userPhone, setUserPhone] = useState('');
 
   // Redirigir si no está autenticado
@@ -61,7 +62,7 @@ const [recurrenceDays, setRecurrenceDays] = useState<string[]>([]);
       const data = snapshot.data();
       if (data?.phone) {
         setUserPhone(data.phone);
-        setValue('phone', data.phone); // setea en el formulario
+        setValue('phone', data.phone);
       }
     };
 
@@ -88,82 +89,83 @@ const [recurrenceDays, setRecurrenceDays] = useState<string[]>([]);
     }
   };
 
-const onSubmit = async (data: CreateTripFormData) => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  const onSubmit = async (data: CreateTripFormData) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    data.recurrenceDays = recurrenceDays;
-    const isRecurrent = isRecurring && recurrenceDays.length > 0;
+      data.recurrenceDays = recurrenceDays;
+      const isRecurrent = isRecurring && recurrenceDays.length > 0;
 
-    // Validación y corrección para viaje NO recurrente
-    if (!isRecurrent) {
-      const selectedDate = new Date(data.departureDate);
-      if (selectedDate < today) {
-        alert("La fecha del viaje no puede ser anterior a hoy.");
-        return;
-      }
-
-      if (data.departureDate instanceof Date) {
-        data.departureDate = data.departureDate.toISOString().split('T')[0];
-      }
-    }
-
-    // 👉 Este await está bien acá dentro
-    await guardarTelefonoUsuario(data.phone);
-
-    if (isRecurrent) {
-      const start = new Date(data.recurrenceStartDate!);
-      const end = new Date(data.recurrenceEndDate!);
-      const anticipacion = data.publishDaysBefore || 0;
-
-      const viajesAGenerar = [];
-      let current = new Date(start);
-
-      while (current <= end) {
-        const diaSemana = current.toLocaleDateString('es-AR', {
-          weekday: 'long',
-        }).toLowerCase();
-
-        if (recurrenceDays.includes(diaSemana)) {
-          const fechaFormateada = current.toISOString().split('T')[0];
-
-          viajesAGenerar.push({
-            ...data,
-            departureDate: fechaFormateada,
-            isRecurring: true,
-            recurrenceId: `${data.origin}-${data.destination}-${data.recurrenceStartDate}`,
-          });
+      // Validación y corrección para viaje NO recurrente
+      if (!isRecurrent) {
+        const selectedDate = new Date(data.departureDate);
+        if (selectedDate < today) {
+          alert("La fecha del viaje no puede ser anterior a hoy.");
+          return;
         }
 
-        current.setDate(current.getDate() + 1);
+        if (data.departureDate instanceof Date) {
+          data.departureDate = data.departureDate.toISOString().split('T')[0];
+        }
       }
 
-      for (const viaje of viajesAGenerar) {
-        await createTrip(viaje as any);
+      // Validaciones para viaje recurrente
+      if (isRecurrent) {
+        if (!data.recurrenceStartDate) {
+          alert("Debes especificar la fecha de inicio para viajes recurrentes.");
+          return;
+        }
+
+        const startDate = new Date(data.recurrenceStartDate);
+        if (startDate < today) {
+          alert("La fecha de inicio no puede ser anterior a hoy.");
+          return;
+        }
+
+        if (data.recurrenceEndDate) {
+          const endDate = new Date(data.recurrenceEndDate);
+          if (endDate <= startDate) {
+            alert("La fecha de fin debe ser posterior a la fecha de inicio.");
+            return;
+          }
+        }
+
+        if (recurrenceDays.length === 0) {
+          alert("Debes seleccionar al menos un día de la semana para viajes recurrentes.");
+          return;
+        }
       }
 
-      const hora = data.departureTime;
-      const dias = recurrenceDays
-        .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
-        .join(', ');
-      const fechaInicio = new Date(data.recurrenceStartDate!).toLocaleDateString();
-      const fechaFin = new Date(data.recurrenceEndDate!).toLocaleDateString();
+      await guardarTelefonoUsuario(data.phone);
 
-      toast.success(
-        `✅ Has publicado con éxito un viaje recurrente para los ${dias} a las ${hora}, desde el ${fechaInicio} hasta el ${fechaFin}.`,
-        { position: 'top-center' }
-      );
-    } else {
-      await createTrip(data as any);
+      if (isRecurrent) {
+        const hora = data.departureTime;
+        const dias = recurrenceDays
+          .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
+          .join(', ');
+        const fechaInicio = new Date(data.recurrenceStartDate!).toLocaleDateString();
+        const fechaFin = data.recurrenceEndDate 
+          ? new Date(data.recurrenceEndDate).toLocaleDateString()
+          : 'indefinida';
+
+        await createTrip(data as any);
+
+        toast.success(
+          `✅ Has publicado con éxito un viaje recurrente para los ${dias} a las ${hora}, desde el ${fechaInicio} hasta el ${fechaFin}.`,
+          { position: 'top-center' }
+        );
+      } else {
+        await createTrip(data as any);
+        toast.success('✅ Viaje publicado con éxito!');
+      }
+
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('❌ Error al crear viaje:', error);
+      toast.error('Ocurrió un error al publicar el viaje.');
     }
-
-    navigate('/dashboard');
-  } catch (error) {
-    console.error('❌ Error al crear viaje:', error);
-    toast.error('Ocurrió un error al publicar el viaje.');
-  }
-};
+  };
 
   return (
     <Layout>
@@ -219,110 +221,111 @@ const onSubmit = async (data: CreateTripFormData) => {
                     ⚠️ Asegurate de ingresar el número completo, incluyendo el código de país (ej: 549...). Es el que se usará para abrir WhatsApp.
                   </div>
                 </div>
-{/* 🔁 Viaje Recurrente */}
-<div className="space-y-4 border-t border-gray-200 pt-6 mt-6">
-  <label className="flex items-center gap-2">
-    <input
-      type="checkbox"
-      checked={isRecurring}
-      onChange={(e) => setIsRecurring(e.target.checked)}
-      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
-    />
-    <span className="text-sm text-gray-700 font-medium">¿Es un viaje recurrente?</span>
-  </label>
 
-  {isRecurring && (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Días de la semana
-        </label>
-        <div className="flex flex-wrap gap-3">
-          {['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'].map((day) => (
-            <label key={day} className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                value={day}
-                checked={recurrenceDays.includes(day)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setRecurrenceDays([...recurrenceDays, day]);
-                  } else {
-                    setRecurrenceDays(recurrenceDays.filter((d) => d !== day));
-                  }
-                }}
-                className="h-4 w-4 text-primary-600 border-gray-300 rounded"
-              />
-              <span className="text-sm capitalize">{day}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+                {/* Viaje Recurrente */}
+                <div className="space-y-4 border-t border-gray-200 pt-6 mt-6">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => setIsRecurring(e.target.checked)}
+                      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                    />
+                    <span className="text-sm text-gray-700 font-medium">¿Es un viaje recurrente?</span>
+                  </label>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input
-          label="Desde (fecha de inicio)"
-          type="date"
-          {...register('recurrenceStartDate', { required: isRecurring })}
-        />
-        <Input
-          label="Hasta (fecha de fin)"
-          type="date"
-          {...register('recurrenceEndDate')}
-        />
-      </div>
+                  {isRecurring && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Días de la semana
+                        </label>
+                        <div className="flex flex-wrap gap-3">
+                          {['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'].map((day) => (
+                            <label key={day} className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                value={day}
+                                checked={recurrenceDays.includes(day)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setRecurrenceDays([...recurrenceDays, day]);
+                                  } else {
+                                    setRecurrenceDays(recurrenceDays.filter((d) => d !== day));
+                                  }
+                                }}
+                                className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                              />
+                              <span className="text-sm capitalize">{day}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
 
-      <Input
-        label="¿Cuántos días antes se publican los viajes?"
-        type="number"
-        min="0"
-        defaultValue={3}
-        {...register('publishDaysBefore', { required: isRecurring })}
-      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          label="Desde (fecha de inicio)"
+                          type="date"
+                          min={new Date().toISOString().split('T')[0]}
+                          {...register('recurrenceStartDate', { required: isRecurring })}
+                        />
+                        <Input
+                          label="Hasta (fecha de fin - opcional)"
+                          type="date"
+                          {...register('recurrenceEndDate')}
+                        />
+                      </div>
 
-      <div className="text-sm mt-1 text-blue-600 flex items-start gap-2">
-        <svg className="h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20.5C6.76 20.5 2.5 16.24 2.5 11S6.76 1.5 12 1.5 21.5 5.76 21.5 11 17.24 20.5 12 20.5z" />
-        </svg>
-        Al guardar un viaje recurrente, se generarán automáticamente los viajes correspondientes a los días seleccionados, con anticipación según la configuración elegida.
-      </div>
-    </div>
-  )}
-</div>
+                      <Input
+                        label="¿Cuántos días antes se publican los viajes?"
+                        type="number"
+                        min="0"
+                        defaultValue={3}
+                        {...register('publishDaysBefore', { required: isRecurring })}
+                      />
+
+                      <div className="text-sm mt-1 text-blue-600 flex items-start gap-2">
+                        <svg className="h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20.5C6.76 20.5 2.5 16.24 2.5 11S6.76 1.5 12 1.5 21.5 5.76 21.5 11 17.24 20.5 12 20.5z" />
+                        </svg>
+                        Al guardar un viaje recurrente, se generarán automáticamente los viajes correspondientes a los días seleccionados. En la búsqueda aparecerá como una sola card con el próximo viaje disponible.
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div className="relative">
-  <Input
-  label="Fecha de salida"
-  type="date"
-  disabled={isRecurring}
-  min={new Date().toISOString().split('T')[0]} // bloqueo visual de días pasados
-  leftIcon={<Calendar className="h-5 w-5 text-gray-400" />}
-  error={
-    isRecurring
-      ? undefined
-      : errors.departureDate?.message
-  }
-  {...register('departureDate', {
-    required: !isRecurring && 'La fecha es requerida',
-    validate: !isRecurring
-      ? (value) => {
-          const selected = new Date(value);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          return selected >= today || 'La fecha no puede ser anterior a hoy';
-        }
-      : undefined,
-  })}
-/>
+                  <div className="relative">
+                    <Input
+                      label="Fecha de salida"
+                      type="date"
+                      disabled={isRecurring}
+                      min={new Date().toISOString().split('T')[0]}
+                      leftIcon={<Calendar className="h-5 w-5 text-gray-400" />}
+                      error={
+                        isRecurring
+                          ? undefined
+                          : errors.departureDate?.message
+                      }
+                      {...register('departureDate', {
+                        required: !isRecurring && 'La fecha es requerida',
+                        validate: !isRecurring
+                          ? (value) => {
+                              const selected = new Date(value);
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              return selected >= today || 'La fecha no puede ser anterior a hoy';
+                            }
+                          : undefined,
+                      })}
+                    />
 
-  {isRecurring && (
-    <p className="text-sm text-gray-500 absolute -bottom-5 left-0">
-      Este campo se desactiva porque el viaje es recurrente.
-    </p>
-  )}
-</div>
-
+                    {isRecurring && (
+                      <p className="text-sm text-gray-500 absolute -bottom-5 left-0">
+                        Este campo se desactiva porque el viaje es recurrente.
+                      </p>
+                    )}
+                  </div>
 
                   <Input
                     label="Hora de salida"
