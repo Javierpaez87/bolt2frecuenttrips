@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Car, Shield, Clock, MapPin, Mountain, Trees, Compass } from 'lucide-react';
+import { Search, Car, Shield, Clock, MapPin, Mountain, Trees, Compass, MessageCircle } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -162,6 +162,36 @@ const Home: React.FC = () => {
 
   return (
     <Layout>
+      {/* Banner de contacto */}
+      <section className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white py-4">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="text-center md:text-left mb-3 md:mb-0">
+              <h3 className="text-lg font-semibold mb-1">
+                Contactanos para consultas o sugerencias
+              </h3>
+              <p className="text-sm opacity-90">
+                BondiCar está comenzando y queremos mejorar lo más rápido posible
+              </p>
+            </div>
+            
+            <div className="flex-shrink-0">
+              <a
+                href={`https://wa.me/5493517631693?text=${encodeURIComponent(
+                  'Hola te contacto desde BondiCar con una consulta/sugerencia'
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-6 py-3 bg-white text-orange-600 font-semibold rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-xl"
+              >
+                <MessageCircle className="h-5 w-5 mr-2" />
+                Contactar por WhatsApp
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Hero Section - Gradiente patagónico */}
       <section className="relative bg-gradient-patagonia text-white py-16 md:py-24 overflow-hidden">
         {/* Decoración de montañas de fondo */}
