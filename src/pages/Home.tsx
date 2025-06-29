@@ -178,14 +178,14 @@ const Home: React.FC = () => {
             <div className="flex-shrink-0">
               <a
                 href={`https://wa.me/5493517631693?text=${encodeURIComponent(
-                  'Hola te contacto desde BondiCar con una consulta/sugerencia'
+                  'Hola! Estoy usando BondiCar y quería hacer una consulta/sugerencia'
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center px-6 py-3 bg-white text-orange-600 font-semibold rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-xl"
               >
                 <MessageCircle className="h-5 w-5 mr-2" />
-                Contactar por WhatsApp
+                Contactar
               </a>
             </div>
           </div>
