@@ -94,8 +94,19 @@ const CreateTrip: React.FC = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      // 🔧 CORREGIDO: Asignar correctamente los días de recurrencia
       data.recurrenceDays = recurrenceDays;
+      data.isRecurring = isRecurring;
       const isRecurrent = isRecurring && recurrenceDays.length > 0;
+
+      console.log('🔧 onSubmit - datos del formulario:', {
+        isRecurrent,
+        isRecurring,
+        recurrenceDays,
+        recurrenceStartDate: data.recurrenceStartDate,
+        recurrenceEndDate: data.recurrenceEndDate,
+        departureDate: data.departureDate
+      });
 
       // Validación y corrección para viaje NO recurrente
       if (!isRecurrent) {
@@ -135,9 +146,17 @@ const CreateTrip: React.FC = () => {
           alert("Debes seleccionar al menos un día de la semana para viajes recurrentes.");
           return;
         }
+
+        // 🔧 CORREGIDO: Para viajes recurrentes, NO usar departureDate
+        // El store se encargará de generar las fechas correctas
+        delete data.departureDate;
       }
 
       await guardarTelefonoUsuario(data.phone);
+
+      console.log('🔧 Datos finales enviados al store:', data);
+
+      await createTrip(data as any);
 
       if (isRecurrent) {
         const hora = data.departureTime;
@@ -149,14 +168,11 @@ const CreateTrip: React.FC = () => {
           ? new Date(data.recurrenceEndDate).toLocaleDateString()
           : 'indefinida';
 
-        await createTrip(data as any);
-
         toast.success(
           `✅ Has publicado con éxito un viaje recurrente para los ${dias} a las ${hora}, desde el ${fechaInicio} hasta el ${fechaFin}.`,
           { position: 'top-center' }
         );
       } else {
-        await createTrip(data as any);
         toast.success('✅ Viaje publicado con éxito!');
       }
 

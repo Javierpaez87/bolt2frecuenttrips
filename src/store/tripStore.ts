@@ -314,7 +314,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
-      console.log('📦 tripData recibido:', tripData);
+      console.log('📦 tripData recibido en store:', tripData);
 
       const isRecurrent = tripData.isRecurring && tripData.recurrenceDays?.length > 0;
 
