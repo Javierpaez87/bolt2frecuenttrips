@@ -172,11 +172,13 @@ export const useTripStore = create<TripState>((set, get) => ({
 
           if (recurrenceDays.includes(diaSemana)) {
             const fechaFormateada = current.toISOString().split('T')[0];
+            
+            // 🔧 CORREGIDO: Usar la fecha específica del viaje, no departureDate del formulario
             const departureDateTimestamp = convertDateToTimestamp(fechaFormateada);
 
             const fullTrip = {
               ...tripData,
-              departureDate: departureDateTimestamp,
+              departureDate: departureDateTimestamp, // 🔧 Usar la fecha específica generada
               driverId: user.uid,
               status: 'active',
               createdAt: serverTimestamp(),
@@ -190,6 +192,8 @@ export const useTripStore = create<TripState>((set, get) => ({
                 profilePicture: user.photoURL || '',
               },
             };
+
+            console.log('🔧 Creando viaje recurrente para fecha:', fechaFormateada, 'día:', diaSemana);
 
             const docRef = await addDoc(collection(db, 'Post Trips'), fullTrip);
             
@@ -205,6 +209,8 @@ export const useTripStore = create<TripState>((set, get) => ({
 
           current.setDate(current.getDate() + 1);
         }
+
+        console.log('🔧 Viajes recurrentes generados:', viajesGenerados.length);
 
         // Actualizar estado con los nuevos viajes
         set((state) => ({

@@ -153,9 +153,9 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 CORREGIDO: Para viajes recurrentes, NO usar departureDate
-        // El store usará recurrenceStartDate y recurrenceEndDate
-        delete data.departureDate;
+        // 🔧 CORREGIDO: Para viajes recurrentes, NO eliminar departureDate
+        // El store lo necesita para procesar las fechas individuales
+        // En su lugar, usaremos recurrenceStartDate como base
       }
 
       await guardarTelefonoUsuario(data.phone);
