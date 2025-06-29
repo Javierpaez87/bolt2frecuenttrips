@@ -35,6 +35,16 @@ const TripCard: React.FC<TripCardProps> = ({
         const parts = date.split('-');
         if (parts.length === 3) {
           const [year, month, day] = parts.map(Number);
+          // Validar que los números sean válidos
+          if (isNaN(year) || isNaN(month) || isNaN(day)) {
+            console.warn('Partes de fecha inválidas:', { year, month, day });
+            return 'Fecha inválida';
+          }
+          // Validar rangos
+          if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+            console.warn('Valores de fecha fuera de rango:', { year, month, day });
+            return 'Fecha inválida';
+          }
           dateObj = new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
         } else {
           console.warn('Formato de fecha string no reconocido:', date);
@@ -49,7 +59,7 @@ const TripCard: React.FC<TripCardProps> = ({
 
       // Verificar que la fecha sea válida
       if (isNaN(dateObj.getTime())) {
-        console.warn('Fecha inválida:', date);
+        console.warn('Fecha inválida generada:', dateObj, 'desde:', date);
         return 'Fecha inválida';
       }
 
