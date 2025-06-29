@@ -5,7 +5,6 @@ import { MapPin, Calendar, Clock, Users, DollarSign, Car, Repeat } from 'lucide-
 import { RecurringTripGroup } from '../../types';
 import Button from '../ui/Button';
 import { useAuthStore } from '../../store/authStore';
-import { formatRecurrenceDays } from '../../utils/recurringTrips';
 
 interface RecurringTripCardProps {
   group: RecurringTripGroup;
@@ -24,23 +23,61 @@ const RecurringTripCard: React.FC<RecurringTripCardProps> = ({
 }) => {
   const { isAuthenticated } = useAuthStore();
 
-  const formatDate = (date: Date): string => {
+  // 🔧 CORREGIDO: Formateo robusto de fechas
+  const formatDate = (date: Date | string): string => {
     try {
-      return format(date, 'dd/MM/yyyy', { locale: es });
+      let dateObj: Date;
+      
+      if (typeof date === 'string') {
+        const parts = date.split('-');
+        if (parts.length === 3) {
+          const [year, month, day] = parts.map(Number);
+          if (isNaN(year) || isNaN(month) || isNaN(day)) {
+            return 'Fecha inválida';
+          }
+          dateObj = new Date(year, month - 1, day);
+        } else {
+          return 'Fecha inválida';
+        }
+      } else if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        return 'Fecha inválida';
+      }
+
+      if (isNaN(dateObj.getTime())) {
+        return 'Fecha inválida';
+      }
+
+      return format(dateObj, 'dd/MM/yyyy', { locale: es });
     } catch (error) {
       console.error('Error formateando fecha:', error);
       return 'Fecha inválida';
     }
   };
 
-  const formatDateRange = (): string => {
-    const startDate = new Date(group.recurrenceStartDate);
-    const endDate = group.recurrenceEndDate ? new Date(group.recurrenceEndDate) : null;
+  const formatRecurrenceDays = (days: string[]): string => {
+    const dayMap: { [key: string]: string } = {
+      'lunes': 'Lun',
+      'martes': 'Mar',
+      'miércoles': 'Mié',
+      'jueves': 'Jue',
+      'viernes': 'Vie',
+      'sábado': 'Sáb',
+      'domingo': 'Dom'
+    };
     
-    if (endDate) {
-      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    return days.map(day => dayMap[day] || day).join(', ');
+  };
+
+  const formatDateRange = (): string => {
+    const startDate = formatDate(group.recurrenceStartDate);
+    const endDate = group.recurrenceEndDate ? formatDate(group.recurrenceEndDate) : null;
+    
+    if (endDate && endDate !== 'Fecha inválida') {
+      return `${startDate} - ${endDate}`;
     } else {
-      return `Desde ${formatDate(startDate)}`;
+      return `Desde ${startDate}`;
     }
   };
 
@@ -212,8 +249,9 @@ const RecurringTripCard: React.FC<RecurringTripCardProps> = ({
             <div className="mt-4">
               <button
                 onClick={() => onDelete(group.id)}
-                className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow"
+                className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow flex items-center"
               >
+                <Repeat className="h-3 w-3 mr-1" />
                 Eliminar Serie Completa
               </button>
             </div>

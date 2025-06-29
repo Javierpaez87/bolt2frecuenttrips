@@ -203,7 +203,7 @@ const getNextTripDate = (recurrenceDays: string[], startDate: string): Date => {
   }
 };
 
-// Generar fechas de viajes individuales para un patrón recurrente
+// 🔧 CORREGIDO: Generar fechas de viajes individuales para un patrón recurrente
 const generateRecurringTripDates = (
   recurrenceDays: string[],
   startDate: string,
@@ -217,6 +217,15 @@ const generateRecurringTripDates = (
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
+    console.log('🔧 generateRecurringTripDates:', {
+      recurrenceDays,
+      startDate,
+      endDate,
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+      today: today.toISOString().split('T')[0]
+    });
+    
     let current = new Date(start);
     let iterations = 0;
     const maxIterations = 1000; // Prevenir loops infinitos
@@ -225,12 +234,10 @@ const generateRecurringTripDates = (
       const dayName = current.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
       
       if (recurrenceDays.includes(dayName)) {
-        // Solo agregar si la fecha de publicación ya llegó
-        const publishDate = new Date(current);
-        publishDate.setDate(current.getDate() - publishDaysBefore);
-        
-        if (publishDate <= today) {
+        // 🔧 CORREGIDO: Solo agregar si la fecha es hoy o futura (sin considerar publishDaysBefore para la fecha del viaje)
+        if (current >= today) {
           dates.push(new Date(current));
+          console.log('✅ Fecha agregada:', current.toISOString().split('T')[0], 'día:', dayName);
         }
       }
       
@@ -242,6 +249,7 @@ const generateRecurringTripDates = (
       console.warn('generateRecurringTripDates: se alcanzó el límite máximo de iteraciones');
     }
     
+    console.log('🔧 Fechas generadas:', dates.map(d => d.toISOString().split('T')[0]));
     return dates;
   } catch (error) {
     console.error('generateRecurringTripDates: error:', error);
@@ -306,12 +314,14 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
-      console.log('📦 tripData.departureDate:', tripData.departureDate, typeof tripData.departureDate);
+      console.log('📦 tripData recibido:', tripData);
 
       const isRecurrent = tripData.isRecurring && tripData.recurrenceDays?.length > 0;
 
       if (isRecurrent) {
-        // Crear viajes recurrentes
+        // 🔧 CORREGIDO: Crear viajes recurrentes con fechas correctas
+        console.log('🔄 Creando viaje recurrente...');
+        
         const recurrenceId = generateRecurrenceId(
           tripData.origin,
           tripData.destination,
@@ -330,17 +340,19 @@ export const useTripStore = create<TripState>((set, get) => ({
           throw new Error('No se generaron fechas válidas para el viaje recurrente');
         }
 
+        console.log('📅 Fechas a crear:', dates.map(d => d.toISOString().split('T')[0]));
+
         // Crear batch correctamente
         const batch = writeBatch(db);
         const createdTrips: Trip[] = [];
 
         for (const date of dates) {
           const tripId = generateTripId();
-          const dateString = date.toISOString().split('T')[0];
           
+          // 🔧 CORREGIDO: Usar la fecha específica generada, NO la fecha actual
           const fullTrip = {
             ...tripData,
-            departureDate: convertDateToTimestamp(dateString),
+            departureDate: convertDateToTimestamp(date), // ✅ Usar la fecha del bucle
             driverId: user.uid,
             status: 'active',
             createdAt: serverTimestamp(),
@@ -361,12 +373,13 @@ export const useTripStore = create<TripState>((set, get) => ({
           createdTrips.push({
             id: tripId,
             ...fullTrip,
-            departureDate: date,
+            departureDate: date, // ✅ Usar la fecha del bucle
             createdAt: new Date(),
           });
         }
 
         await batch.commit();
+        console.log('✅ Viajes recurrentes creados:', createdTrips.length);
 
         set((state) => ({
           trips: [...state.trips, ...createdTrips],
