@@ -94,7 +94,7 @@ const CreateTrip: React.FC = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // 🔧 CORREGIDO: Asignar correctamente los días de recurrencia
+      // Asignar correctamente los días de recurrencia
       data.recurrenceDays = recurrenceDays;
       data.isRecurring = isRecurring;
       const isRecurrent = isRecurring && recurrenceDays.length > 0;
@@ -108,14 +108,20 @@ const CreateTrip: React.FC = () => {
         departureDate: data.departureDate
       });
 
-      // Validación y corrección para viaje NO recurrente
+      // Validación para viaje NO recurrente
       if (!isRecurrent) {
+        if (!data.departureDate) {
+          alert("Debes especificar una fecha de salida.");
+          return;
+        }
+
         const selectedDate = new Date(data.departureDate);
         if (selectedDate < today) {
           alert("La fecha del viaje no puede ser anterior a hoy.");
           return;
         }
 
+        // Asegurar que departureDate esté en formato string
         if (data.departureDate instanceof Date) {
           data.departureDate = data.departureDate.toISOString().split('T')[0];
         }
@@ -148,7 +154,7 @@ const CreateTrip: React.FC = () => {
         }
 
         // 🔧 CORREGIDO: Para viajes recurrentes, NO usar departureDate
-        // El store se encargará de generar las fechas correctas
+        // El store usará recurrenceStartDate y recurrenceEndDate
         delete data.departureDate;
       }
 
