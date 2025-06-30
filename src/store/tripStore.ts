@@ -549,26 +549,8 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
-      // ✅ CORREGIDO: Actualizar asientos disponibles inmediatamente
-      const tripRef = doc(db, 'Post Trips', tripId);
-      const tripSnap = await getDoc(tripRef);
-      
-      if (!tripSnap.exists()) {
-        throw new Error('El viaje no existe');
-      }
-
-      const tripData = tripSnap.data();
-      const currentSeats = tripData.availableSeats || 0;
-      
-      if (currentSeats < seats) {
-        throw new Error('No hay suficientes asientos disponibles');
-      }
-
-      // Actualizar asientos disponibles
-      const newAvailableSeats = currentSeats - seats;
-      await updateDoc(tripRef, {
-        availableSeats: newAvailableSeats
-      });
+      // ✅ CORREGIDO: NO actualizar asientos aquí, solo crear la reserva
+      // Los asientos se actualizan cuando el conductor acepta la reserva
 
       const bookingData = {
         tripId,
@@ -580,20 +562,7 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       await addDoc(collection(db, 'Bookings'), bookingData);
       
-      // ✅ AGREGADO: Actualizar estado local inmediatamente
-      set((state) => ({
-        trips: state.trips.map(trip => 
-          trip.id === tripId 
-            ? { ...trip, availableSeats: newAvailableSeats }
-            : trip
-        ),
-        filteredTrips: state.filteredTrips.map(trip => 
-          trip.id === tripId 
-            ? { ...trip, availableSeats: newAvailableSeats }
-            : trip
-        ),
-        isLoading: false
-      }));
+      set({ isLoading: false });
 
     } catch (error) {
       set({

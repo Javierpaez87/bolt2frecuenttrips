@@ -4,7 +4,9 @@ import {
   getFirestore,
   doc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -30,6 +32,38 @@ const ProfileEdit: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
+
+  // ✅ CORREGIDO: Cargar teléfono desde Firestore al montar el componente
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const auth = getAuth();
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+
+      try {
+        const db = getFirestore();
+        const userRef = doc(db, 'users', uid);
+        const snapshot = await getDoc(userRef);
+        
+        if (snapshot.exists()) {
+          const userData = snapshot.data();
+          if (userData.phone) {
+            setPhone(userData.phone);
+          }
+          if (userData.name) {
+            setName(userData.name);
+          }
+          if (userData.email) {
+            setEmail(userData.email);
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando datos del usuario:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   useEffect(() => {
     if (from === 'booking' && formRef.current) {
@@ -79,7 +113,12 @@ const ProfileEdit: React.FC = () => {
 
     const db = getFirestore();
     const auth = getAuth();
-    const ref = doc(db, 'users', user.id);
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      alert('Error: Usuario no autenticado');
+      setLoading(false);
+      return;
+    }
 
     const telefonoValido = /^549\d{10}$/.test(phone);
     if (!telefonoValido) {
@@ -89,14 +128,28 @@ const ProfileEdit: React.FC = () => {
     }
 
     try {
+      // ✅ CORREGIDO: Actualizar email solo si cambió
       if (auth.currentUser && email !== auth.currentUser.email) {
         await updateEmail(auth.currentUser, email);
       }
 
-      await updateDoc(ref, { name, phone, email });
+      // ✅ CORREGIDO: Usar setDoc con merge para asegurar que se guarde
+      const userRef = doc(db, 'users', uid);
+      await setDoc(userRef, { 
+        name, 
+        phone, 
+        email,
+        updatedAt: new Date()
+      }, { merge: true });
 
+      // ✅ CORREGIDO: Actualizar el store de auth con los nuevos datos
       useAuthStore.setState((state) => ({
-        user: { ...state.user!, name, phone, email },
+        user: { 
+          ...state.user!, 
+          name, 
+          phone, 
+          email 
+        },
       }));
 
       alert('Perfil actualizado correctamente.');
@@ -111,7 +164,7 @@ const ProfileEdit: React.FC = () => {
         }
       } else {
         console.error('Error al actualizar perfil:', error);
-        alert('Error al actualizar perfil.');
+        alert('Error al actualizar perfil: ' + (error.message || 'Error desconocido'));
       }
     } finally {
       setLoading(false);
@@ -183,15 +236,15 @@ const ProfileEdit: React.FC = () => {
         <button
           onClick={handleUpdate}
           disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded mr-3"
+          className="bg-blue-600 text-white px-4 py-2 rounded mr-3 disabled:opacity-50"
         >
-          Guardar Cambios
+          {loading ? 'Guardando...' : 'Guardar Cambios'}
         </button>
 
         <button
           onClick={handleDeleteAccount}
           disabled={loading}
-          className="bg-red-600 text-white px-4 py-2 rounded"
+          className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
         >
           Eliminar Cuenta
         </button>

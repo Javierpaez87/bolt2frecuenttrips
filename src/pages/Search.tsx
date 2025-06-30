@@ -64,6 +64,7 @@ const Search: React.FC = () => {
       return;
     }
 
+    // ✅ CORREGIDO: Para viajes individuales, usar directamente el trip
     setSelectedTrip(trip);
   };
 
@@ -83,11 +84,11 @@ const Search: React.FC = () => {
       return;
     }
 
-    // 🔧 CORREGIDO: Buscar el próximo viaje específico del grupo recurrente
+    // ✅ CORREGIDO: Buscar el próximo viaje específico del grupo recurrente
     console.log('🔍 Buscando próximo viaje para grupo:', group.id);
     console.log('📅 Fecha del próximo viaje:', group.nextTripDate);
     
-    // Convertir nextTripDate a string para comparar
+    // Convertir nextTripDate a string para comparar (formato YYYY-MM-DD)
     const nextTripDateString = group.nextTripDate.toISOString().split('T')[0];
     
     // Buscar viajes que coincidan con el grupo y la fecha
@@ -119,6 +120,12 @@ const Search: React.FC = () => {
       setSelectedTrip(nextTrip);
     } else {
       console.error('❌ No se encontró viaje disponible para reservar');
+      console.log('🔍 Todos los viajes disponibles:', trips.map(t => ({
+        id: t.id,
+        recurrenceId: t.recurrenceId,
+        date: t.departureDate.toISOString().split('T')[0],
+        seats: t.availableSeats
+      })));
       alert('No se pudo encontrar el próximo viaje disponible para reservar. Puede que ya esté completo o no esté publicado aún.');
     }
   };
