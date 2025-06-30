@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Users } from 'lucide-react';
+import { X, Users, Calendar } from 'lucide-react';
 import { Trip } from '../../types';
 import Button from '../ui/Button';
 
@@ -32,6 +32,18 @@ const BookingModal: React.FC<BookingModalProps> = ({ trip, onClose, onConfirm })
       setIsLoading(false);
     }
   };
+
+  // Formatear fecha para mostrar
+  const formatDate = (date: Date): string => {
+    try {
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      return 'Fecha inválida';
+    }
+  };
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -54,6 +66,15 @@ const BookingModal: React.FC<BookingModalProps> = ({ trip, onClose, onConfirm })
             </p>
             <p className="text-sm text-gray-600">
               <span className="font-medium">Conductor:</span> {trip.driver.name}
+            </p>
+            {/* ✅ AGREGADO: Mostrar fecha específica del viaje */}
+            <div className="flex items-center text-sm text-gray-600 mt-1">
+              <Calendar className="h-4 w-4 text-blue-500 mr-1" />
+              <span className="font-medium">Fecha:</span>
+              <span className="ml-1 text-blue-600 font-semibold">{formatDate(trip.departureDate)}</span>
+            </div>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Hora:</span> {trip.departureTime}
             </p>
             <p className="text-sm text-gray-600">
               <span className="font-medium">Asientos disponibles:</span> {trip.availableSeats}

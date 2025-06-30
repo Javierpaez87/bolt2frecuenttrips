@@ -86,6 +86,13 @@ const Dashboard: React.FC = () => {
     }
   }, [isAuthenticated, fetchMyTrips, fetchMyBookings, fetchBookingsForMyTrips]);
 
+  // ✅ AGREGADO: Función para refrescar datos cuando se actualiza una reserva
+  const handleBookingUpdate = () => {
+    fetchMyTrips();
+    fetchMyBookings();
+    fetchBookingsForMyTrips();
+  };
+
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
@@ -125,6 +132,10 @@ const Dashboard: React.FC = () => {
 
   // Filtrar grupos recurrentes activos
   const activeRecurringGroups = myRecurringGroups.filter(group => group.status === 'active');
+
+  // ✅ CORREGIDO: Separar reservas como pasajero vs reservas recibidas como conductor
+  const passengerBookings = myBookings.filter(booking => booking.passengerId === user?.id);
+  const receivedBookings = myBookings.filter(booking => booking.passengerId !== user?.id);
 
   return (
     <Layout>
@@ -289,9 +300,9 @@ const Dashboard: React.FC = () => {
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Viajes que has reservado
                   </h2>
-                  {Array.isArray(myBookings) && myBookings.length > 0 ? (
+                  {Array.isArray(passengerBookings) && passengerBookings.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {myBookings.map((booking) => {
+                      {passengerBookings.map((booking) => {
                         if (!booking.trip) {
                           return (
                             <div
@@ -338,7 +349,11 @@ const Dashboard: React.FC = () => {
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Reservas que recibiste como conductor
                   </h2>
-                  <PendingBookings bookings={myBookings} />
+                  {/* ✅ CORREGIDO: Pasar callback para refrescar datos */}
+                  <PendingBookings 
+                    bookings={receivedBookings} 
+                    onBookingUpdate={handleBookingUpdate}
+                  />
                 </div>
               )}
 
