@@ -12,6 +12,7 @@ import {
   getDoc,
   deleteDoc,
   DocumentData,
+  updateDoc,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Trip, Booking, TripFilters, RecurringTripGroup } from '../types';
@@ -295,40 +296,46 @@ export const useTripStore = create<TripState>((set, get) => ({
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
-      // Procesar grupos recurrentes
+      // 🔧 CORREGIDO: Procesar grupos recurrentes con mejor lógica
       const recurringGroups = new Map<string, RecurringTripGroup>();
       
       trips
         .filter(trip => trip.isRecurring && trip.recurrenceId)
         .forEach(trip => {
-          if (!recurringGroups.has(trip.recurrenceId!)) {
-            const nextTripDate = getNextTripDate(
-              trip.recurrenceDays || [],
-              trip.recurrenceStartDate || ''
-            );
-
-            recurringGroups.set(trip.recurrenceId!, {
-              id: trip.recurrenceId!,
-              driverId: trip.driverId,
-              driver: trip.driver,
-              origin: trip.origin,
-              destination: trip.destination,
-              departureTime: trip.departureTime,
-              availableSeats: trip.availableSeats,
-              price: trip.price,
-              description: trip.description,
-              carModel: trip.carModel,
-              carColor: trip.carColor,
-              recurrenceDays: trip.recurrenceDays || [],
-              recurrenceStartDate: trip.recurrenceStartDate || '',
-              recurrenceEndDate: trip.recurrenceEndDate,
-              publishDaysBefore: trip.publishDaysBefore || 0,
-              nextTripDate,
-              createdAt: trip.createdAt,
-              status: trip.status,
-            });
+          const groupId = trip.recurrenceId!;
+          
+          if (!recurringGroups.has(groupId)) {
+            // Calcular próxima fecha basada en los viajes disponibles del grupo
+            const groupTrips = trips.filter(t => t.recurrenceId === groupId && t.availableSeats > 0);
+            const nextAvailableTrip = groupTrips.sort((a, b) => a.departureDate.getTime() - b.departureDate.getTime())[0];
+            
+            if (nextAvailableTrip) {
+              recurringGroups.set(groupId, {
+                id: groupId,
+                driverId: trip.driverId,
+                driver: trip.driver,
+                origin: trip.origin,
+                destination: trip.destination,
+                departureTime: trip.departureTime,
+                availableSeats: trip.availableSeats,
+                price: trip.price,
+                description: trip.description,
+                carModel: trip.carModel,
+                carColor: trip.carColor,
+                recurrenceDays: trip.recurrenceDays || [],
+                recurrenceStartDate: trip.recurrenceStartDate || '',
+                recurrenceEndDate: trip.recurrenceEndDate,
+                publishDaysBefore: trip.publishDaysBefore || 0,
+                nextTripDate: nextAvailableTrip.departureDate, // 🔧 Usar fecha del próximo viaje real
+                createdAt: trip.createdAt,
+                status: trip.status,
+              });
+            }
           }
         });
+
+      console.log('🔧 Grupos recurrentes procesados:', recurringGroups.size);
+      console.log('🔧 Viajes totales cargados:', trips.length);
 
       set({ 
         trips, 
@@ -543,6 +550,22 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
+      console.log('🔧 Reservando viaje:', tripId, 'asientos:', seats);
+
+      // 🔧 CORREGIDO: Verificar que el viaje existe y tiene asientos disponibles
+      const tripRef = doc(db, 'Post Trips', tripId);
+      const tripSnap = await getDoc(tripRef);
+      
+      if (!tripSnap.exists()) {
+        throw new Error('El viaje no existe');
+      }
+
+      const tripData = tripSnap.data();
+      if (tripData.availableSeats < seats) {
+        throw new Error('No hay suficientes asientos disponibles');
+      }
+
+      // Crear la reserva
       const bookingData = {
         tripId,
         passengerId: user.uid,
@@ -552,8 +575,18 @@ export const useTripStore = create<TripState>((set, get) => ({
       };
 
       await addDoc(collection(db, 'Bookings'), bookingData);
+
+      // 🔧 CORREGIDO: Actualizar asientos disponibles inmediatamente
+      const newAvailableSeats = tripData.availableSeats - seats;
+      await updateDoc(tripRef, {
+        availableSeats: newAvailableSeats
+      });
+
+      console.log('✅ Reserva creada y asientos actualizados');
+
       set({ isLoading: false });
     } catch (error) {
+      console.error('❌ Error al reservar:', error);
       set({
         error: error instanceof Error ? error.message : 'Error al reservar viaje',
         isLoading: false,

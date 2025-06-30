@@ -83,16 +83,43 @@ const Search: React.FC = () => {
       return;
     }
 
-    // Para viajes recurrentes, necesitamos encontrar el próximo viaje específico
-    const nextTrip = trips.find(trip => 
-      trip.recurrenceId === group.id && 
-      trip.departureDate.toDateString() === group.nextTripDate.toDateString()
-    );
+    // 🔧 CORREGIDO: Buscar el próximo viaje específico del grupo recurrente
+    console.log('🔍 Buscando próximo viaje para grupo:', group.id);
+    console.log('📅 Fecha del próximo viaje:', group.nextTripDate);
+    
+    // Convertir nextTripDate a string para comparar
+    const nextTripDateString = group.nextTripDate.toISOString().split('T')[0];
+    
+    // Buscar viajes que coincidan con el grupo y la fecha
+    const availableTrips = trips.filter(trip => {
+      const tripDateString = trip.departureDate.toISOString().split('T')[0];
+      const matchesGroup = trip.recurrenceId === group.id;
+      const matchesDate = tripDateString === nextTripDateString;
+      const hasSeats = trip.availableSeats > 0;
+      
+      console.log('🔍 Evaluando viaje:', {
+        tripId: trip.id,
+        tripDate: tripDateString,
+        nextTripDate: nextTripDateString,
+        matchesGroup,
+        matchesDate,
+        hasSeats,
+        recurrenceId: trip.recurrenceId
+      });
+      
+      return matchesGroup && matchesDate && hasSeats;
+    });
 
-    if (nextTrip) {
+    console.log('✅ Viajes disponibles encontrados:', availableTrips.length);
+
+    if (availableTrips.length > 0) {
+      // Tomar el primer viaje disponible
+      const nextTrip = availableTrips[0];
+      console.log('🎯 Seleccionando viaje:', nextTrip.id, 'para fecha:', nextTrip.departureDate);
       setSelectedTrip(nextTrip);
     } else {
-      alert('No se pudo encontrar el próximo viaje disponible para reservar.');
+      console.error('❌ No se encontró viaje disponible para reservar');
+      alert('No se pudo encontrar el próximo viaje disponible para reservar. Puede que ya esté completo o no esté publicado aún.');
     }
   };
 
@@ -101,6 +128,8 @@ const Search: React.FC = () => {
       await bookTrip(tripId, seats);
       alert('Reserva enviada al conductor');
       setSelectedTrip(null);
+      // Refrescar los datos para actualizar asientos disponibles
+      fetchTrips();
     } catch (error) {
       console.error('Error al reservar:', error);
       alert('Ocurrió un error al reservar');
