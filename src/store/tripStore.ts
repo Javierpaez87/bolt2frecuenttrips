@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Trip, Booking, TripFilters, RecurringTripGroup } from '../types';
+import { processFirestoreTrip, getNextTripDate } from '../utils/recurringTrips';
 
 interface TripState {
   trips: Trip[];
@@ -50,85 +51,6 @@ const convertDateToTimestamp = (dateInput: string | Date): Timestamp => {
     // Si ya es Date, convertir directamente
     return Timestamp.fromDate(dateInput);
   }
-};
-
-// Función helper para crear fecha local desde string YYYY-MM-DD
-const createLocalDate = (dateString: string): Date => {
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
-};
-
-// Función helper para procesar datos de viaje desde Firestore
-const processFirestoreTrip = (doc: any, data: DocumentData): Trip | null => {
-  try {
-    let departureDate: Date;
-
-    // Manejar diferentes formatos de fecha
-    if (data.departureDate) {
-      if (typeof data.departureDate.toDate === 'function') {
-        // Es un Timestamp de Firestore
-        departureDate = data.departureDate.toDate();
-      } else if (typeof data.departureDate === 'string') {
-        // Es un string, convertir a Date local
-        departureDate = createLocalDate(data.departureDate);
-      } else if (data.departureDate instanceof Date) {
-        // Ya es un Date
-        departureDate = data.departureDate;
-      } else {
-        console.warn('Formato de fecha no reconocido:', data.departureDate);
-        return null;
-      }
-    } else {
-      console.warn('No se encontró departureDate en el documento:', doc.id);
-      return null;
-    }
-
-    return {
-      id: doc.id,
-      ...data,
-      departureDate,
-      createdAt: data.createdAt?.toDate?.() || new Date(),
-      driver: {
-        ...data.driver,
-        phone: data.driver?.phone || '',
-        profilePicture: data.driver?.profilePicture || '',
-      },
-    } as Trip;
-  } catch (error) {
-    console.error('Error procesando viaje:', error, data);
-    return null;
-  }
-};
-
-// Función helper para obtener próxima fecha de viaje recurrente
-const getNextTripDate = (recurrenceDays: string[], startDate: string): Date => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const [year, month, day] = startDate.split('-').map(Number);
-  const start = new Date(year, month - 1, day);
-  
-  if (start > today) {
-    const startDayName = start.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
-    if (recurrenceDays.includes(startDayName)) {
-      return start;
-    }
-  }
-  
-  const daysOfWeek = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-  
-  for (let i = 0; i < 14; i++) {
-    const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() + i);
-    
-    const dayName = checkDate.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
-    
-    if (recurrenceDays.includes(dayName) && checkDate >= start) {
-      return checkDate;
-    }
-  }
-  
-  return start;
 };
 
 export const useTripStore = create<TripState>((set, get) => ({
@@ -174,12 +96,11 @@ export const useTripStore = create<TripState>((set, get) => ({
           if (recurrenceDays.includes(diaSemana)) {
             const fechaFormateada = current.toISOString().split('T')[0];
             
-            // 🔧 CORREGIDO: Usar la fecha específica del viaje, no departureDate del formulario
             const departureDateTimestamp = convertDateToTimestamp(fechaFormateada);
 
             const fullTrip = {
               ...tripData,
-              departureDate: departureDateTimestamp, // 🔧 Usar la fecha específica generada
+              departureDate: departureDateTimestamp,
               driverId: user.uid,
               status: 'active',
               createdAt: serverTimestamp(),
@@ -505,14 +426,13 @@ export const useTripStore = create<TripState>((set, get) => ({
             console.error('Error obteniendo datos del pasajero:', e);
           }
 
-          // ✅ CORREGIDO: Incluir información del viaje en la reserva
           const trip = processFirestoreTrip(tripDoc, tripData);
 
           allBookings.push({
             id: bookingDoc.id,
             ...bookingData,
             passengerInfo,
-            trip, // ✅ AGREGADO: Incluir datos del viaje
+            trip,
             createdAt: bookingData.createdAt?.toDate?.() || new Date(),
           } as Booking);
         }
@@ -548,9 +468,6 @@ export const useTripStore = create<TripState>((set, get) => ({
       const auth = getAuth();
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
-
-      // ✅ CORREGIDO: NO actualizar asientos aquí, solo crear la reserva
-      // Los asientos se actualizan cuando el conductor acepta la reserva
 
       const bookingData = {
         tripId,

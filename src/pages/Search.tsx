@@ -8,6 +8,8 @@ import BookingModal from '../components/trip/BookingModal';
 import { useTripStore } from '../store/tripStore';
 import { Trip, TripFilters, RecurringTripGroup } from '../types';
 import { useAuthStore } from '../store/authStore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -48,15 +50,49 @@ const Search: React.FC = () => {
     filterTrips(filters);
   };
 
-  const handleBookTrip = (trip: Trip) => {
+  // ✅ CORREGIDO: Verificar teléfono desde Firestore, no desde el store
+  const checkUserPhone = async (): Promise<boolean> => {
+    const auth = getAuth();
+    const uid = auth.currentUser?.uid;
+    if (!uid) return false;
+
+    try {
+      const db = getFirestore();
+      const userRef = doc(db, 'users', uid);
+      const snapshot = await getDoc(userRef);
+      
+      if (snapshot.exists()) {
+        const userData = snapshot.data();
+        const phone = userData.phone;
+        
+        // Verificar que el teléfono existe y tiene el formato correcto
+        if (phone && typeof phone === 'string' && phone.trim() !== '') {
+          const phoneValid = /^549\d{10}$/.test(phone.trim());
+          console.log('📞 Teléfono verificado:', { phone, phoneValid });
+          return phoneValid;
+        }
+      }
+      
+      console.log('📞 No se encontró teléfono válido en Firestore');
+      return false;
+    } catch (error) {
+      console.error('Error verificando teléfono:', error);
+      return false;
+    }
+  };
+
+  const handleBookTrip = async (trip: Trip) => {
     if (!isAuthenticated) {
       navigate('/login?scrollToForm=true');
       return;
     }
 
-    if (!user?.phone || user.phone.trim() === '') {
+    // ✅ CORREGIDO: Verificar teléfono desde Firestore
+    const hasValidPhone = await checkUserPhone();
+    
+    if (!hasValidPhone) {
       const confirmRedirect = window.confirm(
-        'Necesitás cargar un número de teléfono para poder reservar. ¿Querés ir a tu perfil ahora?'
+        'Necesitás cargar un número de teléfono válido para poder reservar. ¿Querés ir a tu perfil ahora?'
       );
       if (confirmRedirect) {
         navigate('/profile/edit?from=booking');
@@ -64,19 +100,21 @@ const Search: React.FC = () => {
       return;
     }
 
-    // ✅ CORREGIDO: Para viajes individuales, usar directamente el trip
     setSelectedTrip(trip);
   };
 
-  const handleBookRecurringTrip = (group: RecurringTripGroup) => {
+  const handleBookRecurringTrip = async (group: RecurringTripGroup) => {
     if (!isAuthenticated) {
       navigate('/login?scrollToForm=true');
       return;
     }
 
-    if (!user?.phone || user.phone.trim() === '') {
+    // ✅ CORREGIDO: Verificar teléfono desde Firestore
+    const hasValidPhone = await checkUserPhone();
+    
+    if (!hasValidPhone) {
       const confirmRedirect = window.confirm(
-        'Necesitás cargar un número de teléfono para poder reservar. ¿Querés ir a tu perfil ahora?'
+        'Necesitás cargar un número de teléfono válido para poder reservar. ¿Querés ir a tu perfil ahora?'
       );
       if (confirmRedirect) {
         navigate('/profile/edit?from=booking');
@@ -87,28 +125,41 @@ const Search: React.FC = () => {
     // ✅ CORREGIDO: Buscar el próximo viaje específico del grupo recurrente
     console.log('🔍 Buscando próximo viaje para grupo:', group.id);
     console.log('📅 Fecha del próximo viaje:', group.nextTripDate);
+    console.log('🗂️ Total de viajes disponibles:', trips.length);
     
     // Convertir nextTripDate a string para comparar (formato YYYY-MM-DD)
     const nextTripDateString = group.nextTripDate.toISOString().split('T')[0];
     
-    // Buscar viajes que coincidan con el grupo y la fecha
+    // ✅ CORREGIDO: Buscar viajes que coincidan exactamente
     const availableTrips = trips.filter(trip => {
+      // Verificar que el viaje pertenece al grupo recurrente
+      if (trip.recurrenceId !== group.id) {
+        return false;
+      }
+      
+      // Verificar que tiene asientos disponibles
+      if (trip.availableSeats <= 0) {
+        return false;
+      }
+      
+      // Convertir fecha del viaje a string para comparar
       const tripDateString = trip.departureDate.toISOString().split('T')[0];
-      const matchesGroup = trip.recurrenceId === group.id;
+      
+      // Verificar que la fecha coincide
       const matchesDate = tripDateString === nextTripDateString;
-      const hasSeats = trip.availableSeats > 0;
       
       console.log('🔍 Evaluando viaje:', {
         tripId: trip.id,
         tripDate: tripDateString,
         nextTripDate: nextTripDateString,
-        matchesGroup,
         matchesDate,
-        hasSeats,
-        recurrenceId: trip.recurrenceId
+        hasSeats: trip.availableSeats > 0,
+        recurrenceId: trip.recurrenceId,
+        origin: trip.origin,
+        destination: trip.destination
       });
       
-      return matchesGroup && matchesDate && hasSeats;
+      return matchesDate;
     });
 
     console.log('✅ Viajes disponibles encontrados:', availableTrips.length);
@@ -120,13 +171,18 @@ const Search: React.FC = () => {
       setSelectedTrip(nextTrip);
     } else {
       console.error('❌ No se encontró viaje disponible para reservar');
-      console.log('🔍 Todos los viajes disponibles:', trips.map(t => ({
+      console.log('🔍 Debug - Todos los viajes del sistema:', trips.map(t => ({
         id: t.id,
         recurrenceId: t.recurrenceId,
         date: t.departureDate.toISOString().split('T')[0],
-        seats: t.availableSeats
+        seats: t.availableSeats,
+        origin: t.origin,
+        destination: t.destination,
+        isRecurring: t.isRecurring
       })));
-      alert('No se pudo encontrar el próximo viaje disponible para reservar. Puede que ya esté completo o no esté publicado aún.');
+      
+      // ✅ MEJORADO: Mensaje más específico
+      alert(`No se pudo encontrar el viaje del ${group.nextTripDate.toLocaleDateString()} disponible para reservar. Puede que ya esté completo o haya sido eliminado.`);
     }
   };
 
