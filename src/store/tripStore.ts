@@ -75,64 +75,60 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       // Si es viaje recurrente, generar múltiples viajes
       if (tripData.isRecurring && tripData.recurrenceDays?.length > 0) {
-        const { recurrenceStartDate, recurrenceEndDate, recurrenceDays } = tripData;
+        const { recurrenceStartDate, recurrenceEndDate, recurrenceDays, recurringDates } = tripData;
         
         if (!recurrenceStartDate) {
           throw new Error('Fecha de inicio requerida para viajes recurrentes');
         }
 
-        const start = new Date(recurrenceStartDate);
-        const end = recurrenceEndDate ? new Date(recurrenceEndDate) : new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
-        const recurrenceId = `${tripData.origin}-${tripData.destination}-${recurrenceStartDate}-${Date.now()}`;
-
-        const viajesGenerados = [];
-        let current = new Date(start);
-
-        while (current <= end) {
-          const diaSemana = current.toLocaleDateString('es-AR', {
-            weekday: 'long',
-          }).toLowerCase();
-
-          if (recurrenceDays.includes(diaSemana)) {
-            const fechaFormateada = current.toISOString().split('T')[0];
-            
-            const departureDateTimestamp = convertDateToTimestamp(fechaFormateada);
-
-            const fullTrip = {
-              ...tripData,
-              departureDate: departureDateTimestamp,
-              driverId: user.uid,
-              status: 'active',
-              createdAt: serverTimestamp(),
-              isRecurring: true,
-              recurrenceId,
-              driver: {
-                id: user.uid,
-                name: user.displayName || '',
-                email: user.email || '',
-                phone: tripData.phone || '',
-                profilePicture: user.photoURL || '',
-              },
-            };
-
-            console.log('🔧 Creando viaje recurrente para fecha:', fechaFormateada, 'día:', diaSemana);
-
-            const docRef = await addDoc(collection(db, 'Post Trips'), fullTrip);
-            
-            const trip: Trip = {
-              id: docRef.id,
-              ...fullTrip,
-              departureDate: departureDateTimestamp.toDate(),
-              createdAt: new Date(),
-            };
-
-            viajesGenerados.push(trip);
-          }
-
-          current.setDate(current.getDate() + 1);
+        // 🔧 NUEVO: Usar las fechas específicas generadas en CreateTrip
+        const datesToCreate = recurringDates || [];
+        
+        if (datesToCreate.length === 0) {
+          throw new Error('No se generaron fechas para el viaje recurrente');
         }
 
-        console.log('🔧 Viajes recurrentes generados:', viajesGenerados.length);
+        const recurrenceId = `${tripData.origin}-${tripData.destination}-${recurrenceStartDate}-${Date.now()}`;
+        const viajesGenerados = [];
+
+        console.log('🔧 Creando viajes recurrentes para fechas:', datesToCreate);
+
+        // 🔧 CORREGIDO: Crear un viaje por cada fecha específica
+        for (const fechaString of datesToCreate) {
+          const departureDateTimestamp = convertDateToTimestamp(fechaString);
+
+          const fullTrip = {
+            ...tripData,
+            departureDate: departureDateTimestamp,
+            driverId: user.uid,
+            status: 'active',
+            createdAt: serverTimestamp(),
+            isRecurring: true,
+            recurrenceId,
+            driver: {
+              id: user.uid,
+              name: user.displayName || '',
+              email: user.email || '',
+              phone: tripData.phone || '',
+              profilePicture: user.photoURL || '',
+            },
+          };
+
+          console.log('🔧 Creando viaje recurrente para fecha:', fechaString);
+
+          const docRef = await addDoc(collection(db, 'Post Trips'), fullTrip);
+          
+          const trip: Trip = {
+            id: docRef.id,
+            ...fullTrip,
+            departureDate: departureDateTimestamp.toDate(),
+            createdAt: new Date(),
+          };
+
+          viajesGenerados.push(trip);
+        }
+
+        console.log('✅ Viajes recurrentes generados:', viajesGenerados.length);
 
         // Actualizar estado con los nuevos viajes
         set((state) => ({
@@ -217,6 +213,9 @@ export const useTripStore = create<TripState>((set, get) => ({
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
+      console.log('🔍 Viajes cargados desde Firebase:', trips.length);
+      console.log('🔍 Viajes recurrentes encontrados:', trips.filter(t => t.isRecurring).length);
+
       // Procesar grupos recurrentes
       const recurringGroups = new Map<string, RecurringTripGroup>();
       
@@ -251,6 +250,8 @@ export const useTripStore = create<TripState>((set, get) => ({
             });
           }
         });
+
+      console.log('🔍 Grupos recurrentes procesados:', recurringGroups.size);
 
       set({ 
         trips, 
@@ -469,6 +470,8 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
+      console.log('🎯 Reservando viaje:', tripId, 'asientos:', seats);
+
       const bookingData = {
         tripId,
         passengerId: user.uid,
@@ -479,9 +482,11 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       await addDoc(collection(db, 'Bookings'), bookingData);
       
+      console.log('✅ Reserva creada exitosamente');
       set({ isLoading: false });
 
     } catch (error) {
+      console.error('❌ Error al reservar viaje:', error);
       set({
         error: error instanceof Error ? error.message : 'Error al reservar viaje',
         isLoading: false,

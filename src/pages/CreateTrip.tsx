@@ -89,6 +89,42 @@ const CreateTrip: React.FC = () => {
     }
   };
 
+  // 🔧 FUNCIÓN HELPER: Generar fechas de recurrencia
+  const generateRecurringDates = (startDate: string, endDate: string | undefined, recurrenceDays: string[]): string[] => {
+    const dates: string[] = [];
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
+    
+    console.log('🔧 Generando fechas recurrentes:', {
+      startDate,
+      endDate,
+      recurrenceDays,
+      start: start.toISOString(),
+      end: end.toISOString()
+    });
+
+    let current = new Date(start);
+    let generatedCount = 0;
+    const maxDates = 365; // Límite de seguridad
+
+    while (current <= end && generatedCount < maxDates) {
+      const dayName = current.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
+      
+      if (recurrenceDays.includes(dayName)) {
+        const dateString = current.toISOString().split('T')[0];
+        dates.push(dateString);
+        generatedCount++;
+        
+        console.log('✅ Fecha generada:', dateString, 'día:', dayName);
+      }
+      
+      current.setDate(current.getDate() + 1);
+    }
+
+    console.log('🎯 Total fechas generadas:', dates.length);
+    return dates;
+  };
+
   const onSubmit = async (data: CreateTripFormData) => {
     try {
       const today = new Date();
@@ -153,9 +189,22 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 CORREGIDO: Para viajes recurrentes, NO eliminar departureDate
-        // El store lo necesita para procesar las fechas individuales
-        // En su lugar, usaremos recurrenceStartDate como base
+        // 🔧 NUEVO: Generar todas las fechas específicas para el viaje recurrente
+        const recurringDates = generateRecurringDates(
+          data.recurrenceStartDate,
+          data.recurrenceEndDate,
+          recurrenceDays
+        );
+
+        if (recurringDates.length === 0) {
+          alert("No se pudieron generar fechas para el viaje recurrente. Verifica las fechas y días seleccionados.");
+          return;
+        }
+
+        // 🔧 NUEVO: Agregar las fechas generadas a los datos
+        data.recurringDates = recurringDates;
+        
+        console.log('🔧 Fechas específicas generadas:', recurringDates);
       }
 
       await guardarTelefonoUsuario(data.phone);
@@ -310,7 +359,7 @@ const CreateTrip: React.FC = () => {
                         <svg className="h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20.5C6.76 20.5 2.5 16.24 2.5 11S6.76 1.5 12 1.5 21.5 5.76 21.5 11 17.24 20.5 12 20.5z" />
                         </svg>
-                        Al guardar un viaje recurrente, se generarán automáticamente los viajes correspondientes a los días seleccionados. En la búsqueda aparecerá como una sola card con el próximo viaje disponible.
+                        Al guardar un viaje recurrente, se generarán automáticamente TODOS los viajes específicos para las fechas correspondientes. En la búsqueda aparecerá como una sola card con el próximo viaje disponible.
                       </div>
                     </div>
                   )}
