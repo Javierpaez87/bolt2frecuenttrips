@@ -89,16 +89,19 @@ const CreateTrip: React.FC = () => {
     }
   };
 
-  // 🔧 FUNCIÓN HELPER: Generar fechas de recurrencia
-  const generateRecurringDates = (startDate: string, endDate: string | undefined, recurrenceDays: string[]): string[] => {
+  // 🔧 FUNCIÓN HELPER: Generar fechas de recurrencia con publicación automática
+  const generateRecurringDates = (startDate: string, endDate: string | undefined, recurrenceDays: string[], publishDaysBefore: number): string[] => {
     const dates: string[] = [];
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
     console.log('🔧 Generando fechas recurrentes:', {
       startDate,
       endDate,
       recurrenceDays,
+      publishDaysBefore,
       start: start.toISOString(),
       end: end.toISOString()
     });
@@ -111,17 +114,26 @@ const CreateTrip: React.FC = () => {
       const dayName = current.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
       
       if (recurrenceDays.includes(dayName)) {
-        const dateString = current.toISOString().split('T')[0];
-        dates.push(dateString);
-        generatedCount++;
+        // 🔧 NUEVO: Solo crear viajes que deben publicarse ahora o en el futuro cercano
+        const publishDate = new Date(current);
+        publishDate.setDate(publishDate.getDate() - publishDaysBefore);
         
-        console.log('✅ Fecha generada:', dateString, 'día:', dayName);
+        // Solo agregar si la fecha de publicación es hoy o en el futuro
+        if (publishDate <= today) {
+          const dateString = current.toISOString().split('T')[0];
+          dates.push(dateString);
+          generatedCount++;
+          
+          console.log('✅ Fecha generada para publicar:', dateString, 'día:', dayName);
+        } else {
+          console.log('⏳ Fecha futura, no se publica aún:', current.toISOString().split('T')[0]);
+        }
       }
       
       current.setDate(current.getDate() + 1);
     }
 
-    console.log('🎯 Total fechas generadas:', dates.length);
+    console.log('🎯 Total fechas a publicar ahora:', dates.length);
     return dates;
   };
 
@@ -141,7 +153,8 @@ const CreateTrip: React.FC = () => {
         recurrenceDays,
         recurrenceStartDate: data.recurrenceStartDate,
         recurrenceEndDate: data.recurrenceEndDate,
-        departureDate: data.departureDate
+        departureDate: data.departureDate,
+        publishDaysBefore: data.publishDaysBefore
       });
 
       // Validación para viaje NO recurrente
@@ -189,22 +202,28 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 NUEVO: Generar todas las fechas específicas para el viaje recurrente
+        if (!data.publishDaysBefore || data.publishDaysBefore < 0) {
+          alert("Debes especificar cuántos días antes se publican los viajes.");
+          return;
+        }
+
+        // 🔧 NUEVO: Generar fechas específicas que se deben publicar ahora
         const recurringDates = generateRecurringDates(
           data.recurrenceStartDate,
           data.recurrenceEndDate,
-          recurrenceDays
+          recurrenceDays,
+          data.publishDaysBefore || 0
         );
 
         if (recurringDates.length === 0) {
-          alert("No se pudieron generar fechas para el viaje recurrente. Verifica las fechas y días seleccionados.");
+          alert("No hay viajes para publicar en este momento. Los viajes se publicarán automáticamente según la configuración de días antes.");
           return;
         }
 
         // 🔧 NUEVO: Agregar las fechas generadas a los datos
         data.recurringDates = recurringDates;
         
-        console.log('🔧 Fechas específicas generadas:', recurringDates);
+        console.log('🔧 Fechas específicas a crear ahora:', recurringDates);
       }
 
       await guardarTelefonoUsuario(data.phone);
@@ -224,8 +243,8 @@ const CreateTrip: React.FC = () => {
           : 'indefinida';
 
         toast.success(
-          `✅ Has publicado con éxito un viaje recurrente para los ${dias} a las ${hora}, desde el ${fechaInicio} hasta el ${fechaFin}.`,
-          { position: 'top-center' }
+          `✅ Has configurado un viaje recurrente para los ${dias} a las ${hora}. Los viajes se publicarán automáticamente ${data.publishDaysBefore} días antes de cada fecha.`,
+          { position: 'top-center', autoClose: 5000 }
         );
       } else {
         toast.success('✅ Viaje publicado con éxito!');
@@ -351,15 +370,22 @@ const CreateTrip: React.FC = () => {
                         label="¿Cuántos días antes se publican los viajes?"
                         type="number"
                         min="0"
+                        max="30"
                         defaultValue={3}
-                        {...register('publishDaysBefore', { required: isRecurring })}
+                        {...register('publishDaysBefore', { 
+                          required: isRecurring,
+                          min: { value: 0, message: 'Debe ser 0 o mayor' },
+                          max: { value: 30, message: 'Máximo 30 días' }
+                        })}
                       />
 
                       <div className="text-sm mt-1 text-blue-600 flex items-start gap-2">
                         <svg className="h-5 w-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20.5C6.76 20.5 2.5 16.24 2.5 11S6.76 1.5 12 1.5 21.5 5.76 21.5 11 17.24 20.5 12 20.5z" />
                         </svg>
-                        Al guardar un viaje recurrente, se generarán automáticamente TODOS los viajes específicos para las fechas correspondientes. En la búsqueda aparecerá como una sola card con el próximo viaje disponible.
+                        <div>
+                          <strong>Nuevo sistema simplificado:</strong> Los viajes recurrentes se publican automáticamente como viajes individuales normales. Los pasajeros verán cada viaje por separado, sin diferencia visual. Solo se publican los viajes según los "días antes" configurados.
+                        </div>
                       </div>
                     </div>
                   )}

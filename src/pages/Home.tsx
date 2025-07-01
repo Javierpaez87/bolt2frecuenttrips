@@ -5,8 +5,7 @@ import Layout from '../components/layout/Layout';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import TripCard from '../components/trip/TripCard';
-import RecurringTripCard from '../components/trip/RecurringTripCard';
-import { Trip, RecurringTripGroup } from '../types';
+import { Trip } from '../types';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { processFirestoreTrip } from '../utils/recurringTrips';
 
@@ -15,7 +14,6 @@ const Home: React.FC = () => {
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [recommendedTrips, setRecommendedTrips] = useState<Trip[]>([]);
-  const [recommendedRecurringGroups, setRecommendedRecurringGroups] = useState<RecurringTripGroup[]>([]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,57 +30,20 @@ const Home: React.FC = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        // 🔧 SIMPLIFICADO: Solo mostrar viajes individuales, sin distinción
         const allTrips: Trip[] = snapshot.docs
           .map((doc) => {
             const data = doc.data();
             return processFirestoreTrip(doc, data);
           })
-          .filter((trip): trip is Trip => trip !== null && trip.availableSeats > 0);
+          .filter((trip): trip is Trip => 
+            trip !== null && 
+            trip.availableSeats > 0 && 
+            trip.departureDate >= today
+          )
+          .slice(0, 4); // Mostrar hasta 4 viajes recomendados
 
-        // Separar viajes individuales y recurrentes
-        const individualTrips = allTrips
-          .filter(trip => !trip.isRecurring && trip.departureDate >= today)
-          .slice(0, 2);
-
-        // Procesar grupos recurrentes
-        const recurringGroups = new Map<string, RecurringTripGroup>();
-        
-        allTrips
-          .filter(trip => trip.isRecurring && trip.recurrenceId)
-          .forEach(trip => {
-            if (!recurringGroups.has(trip.recurrenceId!)) {
-              const nextTripDate = getNextTripDate(
-                trip.recurrenceDays || [],
-                trip.recurrenceStartDate || ''
-              );
-
-              recurringGroups.set(trip.recurrenceId!, {
-                id: trip.recurrenceId!,
-                driverId: trip.driverId,
-                driver: trip.driver,
-                origin: trip.origin,
-                destination: trip.destination,
-                departureTime: trip.departureTime,
-                availableSeats: trip.availableSeats,
-                price: trip.price,
-                description: trip.description,
-                carModel: trip.carModel,
-                carColor: trip.carColor,
-                recurrenceDays: trip.recurrenceDays || [],
-                recurrenceStartDate: trip.recurrenceStartDate || '',
-                recurrenceEndDate: trip.recurrenceEndDate,
-                publishDaysBefore: trip.publishDaysBefore || 0,
-                nextTripDate,
-                createdAt: trip.createdAt,
-                status: trip.status,
-              });
-            }
-          });
-
-        const recurringGroupsArray = Array.from(recurringGroups.values()).slice(0, 2);
-
-        setRecommendedTrips(individualTrips);
-        setRecommendedRecurringGroups(recurringGroupsArray);
+        setRecommendedTrips(allTrips);
       } catch (error) {
         console.error('Error al traer viajes recomendados:', error);
       }
@@ -90,75 +51,6 @@ const Home: React.FC = () => {
 
     fetchRecommendedTrips();
   }, []);
-
-  // Función helper para obtener próxima fecha
-  const getNextTripDate = (recurrenceDays: string[], startDate: string): Date => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const [year, month, day] = startDate.split('-').map(Number);
-    const start = new Date(year, month - 1, day);
-    
-    if (start > today) {
-      const startDayName = start.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
-      if (recurrenceDays.includes(startDayName)) {
-        return start;
-      }
-    }
-    
-    const daysOfWeek = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    
-    for (let i = 0; i < 14; i++) {
-      const checkDate = new Date(today);
-      checkDate.setDate(today.getDate() + i);
-      
-      const dayName = checkDate.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
-      
-      if (recurrenceDays.includes(dayName) && checkDate >= start) {
-        return checkDate;
-      }
-    }
-    
-    return start;
-  };
-
-  const processFirestoreTrip = (doc: any, data: any): Trip | null => {
-    try {
-      let departureDate: Date;
-
-      if (data.departureDate) {
-        if (typeof data.departureDate.toDate === 'function') {
-          departureDate = data.departureDate.toDate();
-        } else if (typeof data.departureDate === 'string') {
-          const [year, month, day] = data.departureDate.split('-').map(Number);
-          departureDate = new Date(year, month - 1, day);
-        } else if (data.departureDate instanceof Date) {
-          departureDate = data.departureDate;
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
-
-      return {
-        id: doc.id,
-        ...data,
-        departureDate,
-        createdAt: data.createdAt?.toDate?.() || new Date(),
-        driver: {
-          ...data.driver,
-          phone: data.driver?.phone || '',
-          profilePicture: data.driver?.profilePicture || '',
-        },
-      } as Trip;
-    } catch (error) {
-      console.error('Error procesando viaje:', error);
-      return null;
-    }
-  };
-
-  const totalRecommendations = recommendedTrips.length + recommendedRecurringGroups.length;
 
   return (
     <Layout>
@@ -284,62 +176,24 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Viajes recomendados */}
-      {totalRecommendations > 0 && (
+      {/* Viajes recomendados - SIMPLIFICADO */}
+      {recommendedTrips.length > 0 && (
         <section className="py-16 bg-white">
           <div className="container mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-center mb-10 text-slate-800">
               Viajes que pueden interesarte
             </h2>
             
-            <div className="space-y-8">
-              {/* Viajes Recurrentes */}
-              {recommendedRecurringGroups.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm mr-2">
-                      Recurrentes
-                    </span>
-                    Se repiten semanalmente
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {recommendedRecurringGroups.map((group) => (
-                      <div
-                        key={group.id}
-                        className="cursor-pointer"
-                        onClick={() => navigate('/search')}
-                      >
-                        <RecurringTripCard group={group} hideConductorInfo />
-                      </div>
-                    ))}
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {recommendedTrips.map((trip) => (
+                <div
+                  key={trip.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate('/search')}
+                >
+                  <TripCard trip={trip} hideConductorInfo />
                 </div>
-              )}
-
-              {/* Viajes Individuales */}
-              {recommendedTrips.length > 0 && (
-                <div>
-                  {recommendedRecurringGroups.length > 0 && (
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">
-                        Individuales
-                      </span>
-                      Viajes de una sola vez
-                    </h3>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {recommendedTrips.map((trip) => (
-                      <div
-                        key={trip.id}
-                        className="cursor-pointer"
-                        onClick={() => navigate('/search')}
-                      >
-                        <TripCard trip={trip} hideConductorInfo />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
 
             <div className="text-center mt-10">
