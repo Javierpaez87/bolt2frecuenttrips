@@ -27,7 +27,7 @@ const ProfileEdit: React.FC = () => {
   const navigate = useNavigate();
 
   const [name, setName] = useState(user?.name || '');
-  const [phone, setPhone] = useState(user?.phone || '');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState(user?.email || '');
   const [loading, setLoading] = useState(false);
 
@@ -47,8 +47,11 @@ const ProfileEdit: React.FC = () => {
         
         if (snapshot.exists()) {
           const userData = snapshot.data();
+          console.log('📱 Datos del usuario cargados:', userData);
+          
           if (userData.phone) {
             setPhone(userData.phone);
+            console.log('📱 Teléfono cargado:', userData.phone);
           }
           if (userData.name) {
             setName(userData.name);
@@ -56,6 +59,8 @@ const ProfileEdit: React.FC = () => {
           if (userData.email) {
             setEmail(userData.email);
           }
+        } else {
+          console.log('📱 No se encontró documento del usuario');
         }
       } catch (error) {
         console.error('Error cargando datos del usuario:', error);
@@ -128,9 +133,12 @@ const ProfileEdit: React.FC = () => {
     }
 
     try {
+      console.log('💾 Guardando datos del usuario:', { name, phone, email });
+
       // ✅ CORREGIDO: Actualizar email solo si cambió
       if (auth.currentUser && email !== auth.currentUser.email) {
         await updateEmail(auth.currentUser, email);
+        console.log('📧 Email actualizado');
       }
 
       // ✅ CORREGIDO: Usar setDoc con merge para asegurar que se guarde
@@ -142,19 +150,32 @@ const ProfileEdit: React.FC = () => {
         updatedAt: new Date()
       }, { merge: true });
 
-      // ✅ CORREGIDO: Actualizar el store de auth con los nuevos datos
-      useAuthStore.setState((state) => ({
-        user: { 
-          ...state.user!, 
-          name, 
-          phone, 
-          email 
-        },
-      }));
+      console.log('💾 Datos guardados en Firestore');
+
+      // ✅ NUEVO: Verificar que se guardó correctamente
+      const verifyDoc = await getDoc(userRef);
+      if (verifyDoc.exists()) {
+        const savedData = verifyDoc.data();
+        console.log('✅ Verificación - datos guardados:', savedData);
+        
+        // ✅ CORREGIDO: Actualizar el store de auth con los datos verificados
+        useAuthStore.setState((state) => ({
+          user: { 
+            ...state.user!, 
+            name: savedData.name || name, 
+            phone: savedData.phone || phone, 
+            email: savedData.email || email 
+          },
+        }));
+
+        console.log('🔄 Store actualizado con datos verificados');
+      }
 
       alert('Perfil actualizado correctamente.');
       navigate(from === 'search' || from === 'booking' ? '/search' : '/dashboard?tab=profile');
     } catch (error: any) {
+      console.error('❌ Error al actualizar perfil:', error);
+      
       if (error.code === 'auth/requires-recent-login') {
         try {
           await reauthenticateUser();
@@ -163,7 +184,6 @@ const ProfileEdit: React.FC = () => {
           alert('La reautenticación falló. Verificá tus credenciales.');
         }
       } else {
-        console.error('Error al actualizar perfil:', error);
         alert('Error al actualizar perfil: ' + (error.message || 'Error desconocido'));
       }
     } finally {

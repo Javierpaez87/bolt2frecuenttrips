@@ -50,33 +50,51 @@ const Search: React.FC = () => {
     filterTrips(filters);
   };
 
-  // ✅ CORREGIDO: Verificar teléfono desde Firestore, no desde el store
+  // ✅ MEJORADO: Verificar teléfono con más logging y validación robusta
   const checkUserPhone = async (): Promise<boolean> => {
     const auth = getAuth();
     const uid = auth.currentUser?.uid;
-    if (!uid) return false;
+    if (!uid) {
+      console.log('📞 No hay usuario autenticado');
+      return false;
+    }
 
     try {
       const db = getFirestore();
       const userRef = doc(db, 'users', uid);
       const snapshot = await getDoc(userRef);
       
+      console.log('📞 Verificando teléfono para usuario:', uid);
+      
       if (snapshot.exists()) {
         const userData = snapshot.data();
         const phone = userData.phone;
         
+        console.log('📞 Datos del usuario encontrados:', { 
+          phone, 
+          hasPhone: !!phone,
+          phoneType: typeof phone 
+        });
+        
         // Verificar que el teléfono existe y tiene el formato correcto
         if (phone && typeof phone === 'string' && phone.trim() !== '') {
           const phoneValid = /^549\d{10}$/.test(phone.trim());
-          console.log('📞 Teléfono verificado:', { phone, phoneValid });
+          console.log('📞 Validación de teléfono:', { 
+            phone: phone.trim(), 
+            phoneValid,
+            length: phone.trim().length 
+          });
           return phoneValid;
+        } else {
+          console.log('📞 Teléfono no válido o vacío');
+          return false;
         }
+      } else {
+        console.log('📞 No se encontró documento del usuario en Firestore');
+        return false;
       }
-      
-      console.log('📞 No se encontró teléfono válido en Firestore');
-      return false;
     } catch (error) {
-      console.error('Error verificando teléfono:', error);
+      console.error('❌ Error verificando teléfono:', error);
       return false;
     }
   };
@@ -87,10 +105,15 @@ const Search: React.FC = () => {
       return;
     }
 
-    // ✅ CORREGIDO: Verificar teléfono desde Firestore
+    console.log('🎯 Iniciando proceso de reserva para viaje:', trip.id);
+
+    // ✅ MEJORADO: Verificar teléfono con logging detallado
     const hasValidPhone = await checkUserPhone();
     
+    console.log('📞 Resultado verificación teléfono:', hasValidPhone);
+    
     if (!hasValidPhone) {
+      console.log('📞 Redirigiendo a editar perfil por teléfono inválido');
       const confirmRedirect = window.confirm(
         'Necesitás cargar un número de teléfono válido para poder reservar. ¿Querés ir a tu perfil ahora?'
       );
@@ -100,6 +123,7 @@ const Search: React.FC = () => {
       return;
     }
 
+    console.log('✅ Teléfono válido, procediendo con reserva');
     setSelectedTrip(trip);
   };
 
@@ -109,10 +133,15 @@ const Search: React.FC = () => {
       return;
     }
 
-    // ✅ CORREGIDO: Verificar teléfono desde Firestore
+    console.log('🎯 Iniciando proceso de reserva para grupo recurrente:', group.id);
+
+    // ✅ MEJORADO: Verificar teléfono con logging detallado
     const hasValidPhone = await checkUserPhone();
     
+    console.log('📞 Resultado verificación teléfono:', hasValidPhone);
+    
     if (!hasValidPhone) {
+      console.log('📞 Redirigiendo a editar perfil por teléfono inválido');
       const confirmRedirect = window.confirm(
         'Necesitás cargar un número de teléfono válido para poder reservar. ¿Querés ir a tu perfil ahora?'
       );
@@ -121,6 +150,8 @@ const Search: React.FC = () => {
       }
       return;
     }
+
+    console.log('✅ Teléfono válido, buscando próximo viaje del grupo');
 
     // ✅ CORREGIDO: Buscar el próximo viaje específico del grupo recurrente
     console.log('🔍 Buscando próximo viaje para grupo:', group.id);
