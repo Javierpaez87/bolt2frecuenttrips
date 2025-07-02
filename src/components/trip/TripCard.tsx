@@ -31,78 +31,77 @@ const TripCard: React.FC<TripCardProps> = ({
   onDeleteRecurring, // 🔄 NUEVA PROP AGREGADA
   onDelete, // 🔄 NUEVA PROP AGREGADA
 }) => {
-  // 🔧 FUNCIÓN CORREGIDA: Formateo robusto de fechas SIN problemas de timezone
+  // 🔧 FUNCIÓN COMPLETAMENTE REESCRITA: Formateo de fechas sin problemas de timezone
   const formatDate = (date: Date | string): string => {
     try {
-      let dateObj: Date;
-      
-      console.log('🔧 TripCard formatDate INPUT:', { 
+      console.log('🔧 TripCard formatDate INICIO:', { 
+        tripId: trip.id,
+        isRecurring: trip.isRecurring,
         date, 
         type: typeof date,
         isDate: date instanceof Date,
-        tripId: trip.id,
-        isRecurring: trip.isRecurring 
+        dateString: date instanceof Date ? date.toString() : date
       });
-      
+
+      let day: number, month: number, year: number;
+
       if (typeof date === 'string') {
-        // Si es string en formato YYYY-MM-DD, parsearlo como fecha local
+        // Si es string en formato YYYY-MM-DD, parsearlo directamente
         const parts = date.split('-');
         if (parts.length === 3) {
-          const [year, month, day] = parts.map(Number);
-          // Validar que los números sean válidos
-          if (isNaN(year) || isNaN(month) || isNaN(day)) {
-            console.warn('Partes de fecha inválidas:', { year, month, day });
-            return 'Fecha inválida';
-          }
-          // Validar rangos
-          if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
-            console.warn('Valores de fecha fuera de rango:', { year, month, day });
-            return 'Fecha inválida';
-          }
-          dateObj = new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
+          year = parseInt(parts[0]);
+          month = parseInt(parts[1]); // Ya está en formato 1-12
+          day = parseInt(parts[2]);
+          
+          console.log('🔧 String parseado directamente:', { year, month, day });
         } else {
           console.warn('Formato de fecha string no reconocido:', date);
           return 'Fecha inválida';
         }
       } else if (date instanceof Date) {
-        dateObj = new Date(date); // Crear nueva instancia para evitar mutaciones
+        // Si es Date, extraer componentes usando métodos locales
+        day = date.getDate();
+        month = date.getMonth() + 1; // getMonth() devuelve 0-11, necesitamos 1-12
+        year = date.getFullYear();
+        
+        console.log('🔧 Date parseado:', { 
+          originalDate: date.toString(),
+          iso: date.toISOString(),
+          day, 
+          month, 
+          year,
+          getDate: date.getDate(),
+          getMonth: date.getMonth(),
+          getFullYear: date.getFullYear()
+        });
       } else {
         console.warn('Tipo de fecha no reconocido:', typeof date, date);
         return 'Fecha inválida';
       }
 
-      // Verificar que la fecha sea válida
-      if (isNaN(dateObj.getTime())) {
-        console.warn('Fecha inválida generada:', dateObj, 'desde:', date);
+      // Validar que los números sean válidos
+      if (isNaN(year) || isNaN(month) || isNaN(day)) {
+        console.warn('Componentes de fecha inválidos:', { year, month, day });
         return 'Fecha inválida';
       }
 
-      // 🔧 CORREGIDO: Formatear usando métodos locales para evitar problemas de timezone
-      const day = dateObj.getDate().toString().padStart(2, '0');
-      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-      const year = dateObj.getFullYear();
+      // Formatear con padding
+      const dayStr = day.toString().padStart(2, '0');
+      const monthStr = month.toString().padStart(2, '0');
+      const formattedDate = `${dayStr}/${monthStr}/${year}`;
       
-      const formattedDate = `${day}/${month}/${year}`;
-      
-      // 🔧 DEBUG: Log detallado para identificar el problema
-      console.log('🔧 TripCard formatDate RESULTADO:', {
+      console.log('🔧 TripCard formatDate RESULTADO FINAL:', {
         tripId: trip.id,
         isRecurring: trip.isRecurring,
         input: date,
         inputType: typeof date,
-        dateObj: {
-          iso: dateObj.toISOString().split('T')[0],
-          getDate: dateObj.getDate(),
-          getMonth: dateObj.getMonth() + 1,
-          getFullYear: dateObj.getFullYear(),
-          toString: dateObj.toString()
-        },
+        extracted: { day, month, year },
         formatted: formattedDate
       });
       
       return formattedDate;
     } catch (error) {
-      console.error('Error formateando fecha:', error, date);
+      console.error('❌ Error formateando fecha en TripCard:', error, { tripId: trip.id, date });
       return 'Fecha inválida';
     }
   };
