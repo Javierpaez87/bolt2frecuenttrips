@@ -30,7 +30,7 @@ const Home: React.FC = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // 🔧 SIMPLIFICADO: Solo mostrar viajes individuales, sin distinción
+        // ✅ CORREGIDO: Aplicar el mismo filtro que en el store
         const allTrips: Trip[] = snapshot.docs
           .map((doc) => {
             const data = doc.data();
@@ -40,10 +40,34 @@ const Home: React.FC = () => {
             trip !== null && 
             trip.availableSeats > 0 && 
             trip.departureDate >= today
-          )
-          .slice(0, 4); // Mostrar hasta 4 viajes recomendados
+          );
 
-        setRecommendedTrips(allTrips);
+        // ✅ APLICAR EL MISMO FILTRO QUE EN EL STORE: Solo mostrar UN viaje por grupo recurrente
+        const recurringGroups = new Map<string, Trip>();
+        const individualTrips: Trip[] = [];
+
+        allTrips.forEach(trip => {
+          if (trip.isRecurring && trip.recurrenceId) {
+            const existingTrip = recurringGroups.get(trip.recurrenceId);
+            if (!existingTrip || trip.departureDate < existingTrip.departureDate) {
+              // Guardar solo el viaje más próximo de cada grupo recurrente
+              recurringGroups.set(trip.recurrenceId, trip);
+            }
+          } else {
+            // Viajes individuales se muestran todos
+            individualTrips.push(trip);
+          }
+        });
+
+        // Combinar viajes individuales con próximos viajes recurrentes
+        const finalTrips = [...individualTrips, ...Array.from(recurringGroups.values())];
+
+        console.log('🏠 Home - Viajes totales procesados:', allTrips.length);
+        console.log('🏠 Home - Viajes finales mostrados:', finalTrips.length);
+        console.log('🏠 Home - Grupos recurrentes únicos:', recurringGroups.size);
+
+        // Mostrar hasta 4 viajes recomendados
+        setRecommendedTrips(finalTrips.slice(0, 4));
       } catch (error) {
         console.error('Error al traer viajes recomendados:', error);
       }
@@ -176,7 +200,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Viajes recomendados - SIMPLIFICADO */}
+      {/* Viajes recomendados - CON FILTRO CORRECTO */}
       {recommendedTrips.length > 0 && (
         <section className="py-16 bg-white">
           <div className="container mx-auto px-4">
