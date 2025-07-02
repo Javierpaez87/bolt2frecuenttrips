@@ -212,7 +212,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
-      // 🔧 SIMPLIFICADO: Para viajes recurrentes, mostrar solo el próximo viaje de cada grupo
+      // ✅ RESTAURADO: Filtro para mostrar solo UN viaje por grupo recurrente
       const recurringGroups = new Map<string, Trip>();
       const individualTrips: Trip[] = [];
 
