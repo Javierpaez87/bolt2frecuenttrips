@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Trip, Booking, TripFilters, RecurringTripGroup } from '../types';
-import { processFirestoreTrip, getNextTripDate } from '../utils/recurringTrips';
+import { processFirestoreTrip, getNextTripDate, createLocalDate } from '../utils/recurringTrips';
 
 interface TripState {
   trips: Trip[];
@@ -43,9 +43,8 @@ interface TripState {
 // Función helper para convertir fecha string a Timestamp SIN problemas de timezone
 const convertDateToTimestamp = (dateInput: string | Date): Timestamp => {
   if (typeof dateInput === 'string') {
-    // Si es string en formato YYYY-MM-DD, crear fecha local y luego convertir a Timestamp
-    const [year, month, day] = dateInput.split('-').map(Number);
-    const date = new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
+    // 🔧 CORREGIDO: Usar createLocalDate para consistencia
+    const date = createLocalDate(dateInput);
     return Timestamp.fromDate(date);
   } else {
     // Si ya es Date, convertir directamente
@@ -99,7 +98,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           throw new Error('Fecha de inicio requerida para viajes recurrentes');
         }
 
-        // 🔧 NUEVO: Usar las fechas específicas generadas en CreateTrip
+        // 🔧 CORREGIDO: Usar las fechas específicas generadas en CreateTrip
         const datesToCreate = recurringDates || [];
         
         if (datesToCreate.length === 0) {

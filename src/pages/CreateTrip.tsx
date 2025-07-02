@@ -12,6 +12,7 @@ import Button from '../components/ui/Button';
 
 import { useTripStore } from '../store/tripStore';
 import { useAuthStore } from '../store/authStore';
+import { generateRecurringDates } from '../utils/recurringTrips';
 
 interface CreateTripFormData {
   origin: string;
@@ -89,54 +90,6 @@ const CreateTrip: React.FC = () => {
     }
   };
 
-  // 🔧 FUNCIÓN HELPER: Generar fechas de recurrencia con publicación automática
-  const generateRecurringDates = (startDate: string, endDate: string | undefined, recurrenceDays: string[], publishDaysBefore: number): string[] => {
-    const dates: string[] = [];
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    console.log('🔧 Generando fechas recurrentes:', {
-      startDate,
-      endDate,
-      recurrenceDays,
-      publishDaysBefore,
-      start: start.toISOString(),
-      end: end.toISOString()
-    });
-
-    let current = new Date(start);
-    let generatedCount = 0;
-    const maxDates = 365; // Límite de seguridad
-
-    while (current <= end && generatedCount < maxDates) {
-      const dayName = current.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase();
-      
-      if (recurrenceDays.includes(dayName)) {
-        // 🔧 NUEVO: Solo crear viajes que deben publicarse ahora o en el futuro cercano
-        const publishDate = new Date(current);
-        publishDate.setDate(publishDate.getDate() - publishDaysBefore);
-        
-        // Solo agregar si la fecha de publicación es hoy o en el futuro
-        if (publishDate <= today) {
-          const dateString = current.toISOString().split('T')[0];
-          dates.push(dateString);
-          generatedCount++;
-          
-          console.log('✅ Fecha generada para publicar:', dateString, 'día:', dayName);
-        } else {
-          console.log('⏳ Fecha futura, no se publica aún:', current.toISOString().split('T')[0]);
-        }
-      }
-      
-      current.setDate(current.getDate() + 1);
-    }
-
-    console.log('🎯 Total fechas a publicar ahora:', dates.length);
-    return dates;
-  };
-
   const onSubmit = async (data: CreateTripFormData) => {
     try {
       const today = new Date();
@@ -207,7 +160,7 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 NUEVO: Generar fechas específicas que se deben publicar ahora
+        // 🔧 CORREGIDO: Usar la función mejorada de generación de fechas
         const recurringDates = generateRecurringDates(
           data.recurrenceStartDate,
           data.recurrenceEndDate,
@@ -220,7 +173,7 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 NUEVO: Agregar las fechas generadas a los datos
+        // 🔧 CORREGIDO: Agregar las fechas generadas a los datos
         data.recurringDates = recurringDates;
         
         console.log('🔧 Fechas específicas a crear ahora:', recurringDates);
@@ -384,7 +337,7 @@ const CreateTrip: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20.5C6.76 20.5 2.5 16.24 2.5 11S6.76 1.5 12 1.5 21.5 5.76 21.5 11 17.24 20.5 12 20.5z" />
                         </svg>
                         <div>
-                          <strong>Nuevo sistema simplificado:</strong> Los viajes recurrentes se publican automáticamente como viajes individuales normales. Los pasajeros verán cada viaje por separado, sin diferencia visual. Solo se publican los viajes según los "días antes" configurados.
+                          <strong>Sistema simplificado:</strong> Los viajes recurrentes se publican automáticamente como viajes individuales normales. Los pasajeros verán cada viaje por separado, sin diferencia visual. Solo se publican los viajes según los "días antes" configurados.
                         </div>
                       </div>
                     </div>
