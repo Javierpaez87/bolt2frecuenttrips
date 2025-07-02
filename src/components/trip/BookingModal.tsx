@@ -33,14 +33,37 @@ const BookingModal: React.FC<BookingModalProps> = ({ trip, onClose, onConfirm })
     }
   };
 
-  // Formatear fecha para mostrar
+  // 🔧 FUNCIÓN CORREGIDA: Formatear fecha sin problemas de timezone
   const formatDate = (date: Date): string => {
     try {
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
+      // Crear nueva instancia para evitar mutaciones
+      const dateObj = new Date(date);
+      
+      // Verificar que la fecha sea válida
+      if (isNaN(dateObj.getTime())) {
+        return 'Fecha inválida';
+      }
+
+      // Formatear usando métodos locales para evitar problemas de timezone
+      const day = dateObj.getDate().toString().padStart(2, '0');
+      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+      const year = dateObj.getFullYear();
+      
+      const formattedDate = `${day}/${month}/${year}`;
+      
+      // 🔧 DEBUG: Log para verificar el formateo
+      console.log('🔧 BookingModal formatDate:', {
+        input: date,
+        dateObj: dateObj.toISOString().split('T')[0],
+        formatted: formattedDate,
+        getDate: dateObj.getDate(),
+        getMonth: dateObj.getMonth() + 1,
+        getFullYear: dateObj.getFullYear()
+      });
+      
+      return formattedDate;
     } catch (error) {
+      console.error('Error formateando fecha en BookingModal:', error, date);
       return 'Fecha inválida';
     }
   };
@@ -67,7 +90,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ trip, onClose, onConfirm })
             <p className="text-sm text-gray-600">
               <span className="font-medium">Conductor:</span> {trip.driver.name}
             </p>
-            {/* ✅ AGREGADO: Mostrar fecha específica del viaje */}
+            {/* ✅ CORREGIDO: Mostrar fecha específica del viaje con formateo correcto */}
             <div className="flex items-center text-sm text-gray-600 mt-1">
               <Calendar className="h-4 w-4 text-blue-500 mr-1" />
               <span className="font-medium">Fecha:</span>

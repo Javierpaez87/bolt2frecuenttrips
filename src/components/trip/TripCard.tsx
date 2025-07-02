@@ -31,7 +31,7 @@ const TripCard: React.FC<TripCardProps> = ({
   onDeleteRecurring, // 🔄 NUEVA PROP AGREGADA
   onDelete, // 🔄 NUEVA PROP AGREGADA
 }) => {
-  // 🔄 FUNCIÓN MEJORADA: Formateo robusto de fechas
+  // 🔧 FUNCIÓN CORREGIDA: Formateo robusto de fechas SIN problemas de timezone
   const formatDate = (date: Date | string): string => {
     try {
       let dateObj: Date;
@@ -57,7 +57,7 @@ const TripCard: React.FC<TripCardProps> = ({
           return 'Fecha inválida';
         }
       } else if (date instanceof Date) {
-        dateObj = date;
+        dateObj = new Date(date); // Crear nueva instancia para evitar mutaciones
       } else {
         console.warn('Tipo de fecha no reconocido:', typeof date, date);
         return 'Fecha inválida';
@@ -69,11 +69,24 @@ const TripCard: React.FC<TripCardProps> = ({
         return 'Fecha inválida';
       }
 
-      // Formatear la fecha como DD/MM/YYYY
+      // 🔧 CORREGIDO: Formatear usando métodos locales para evitar problemas de timezone
       const day = dateObj.getDate().toString().padStart(2, '0');
       const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
       const year = dateObj.getFullYear();
-      return `${day}/${month}/${year}`;
+      
+      const formattedDate = `${day}/${month}/${year}`;
+      
+      // 🔧 DEBUG: Log para verificar el formateo
+      console.log('🔧 TripCard formatDate:', {
+        input: date,
+        dateObj: dateObj.toISOString().split('T')[0],
+        formatted: formattedDate,
+        getDate: dateObj.getDate(),
+        getMonth: dateObj.getMonth() + 1,
+        getFullYear: dateObj.getFullYear()
+      });
+      
+      return formattedDate;
     } catch (error) {
       console.error('Error formateando fecha:', error, date);
       return 'Fecha inválida';
