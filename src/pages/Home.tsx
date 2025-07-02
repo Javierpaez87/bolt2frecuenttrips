@@ -177,7 +177,7 @@ const Home: React.FC = () => {
       </section>
 
       {/* Hero Section - Gradiente patagónico */}
-      <section className="relative bg-gradient-patagonia text-white py-16 md:py-24 overflow-hidden">
+      <section className="relative bg-gradient-lake text-white py-16 md:py-24 overflow-hidden">
         {/* Decoración de montañas de fondo */}
         <div className="absolute inset-0 opacity-10">
           <svg className="w-full h-full" viewBox="0 0 1200 600" fill="currentColor">
@@ -319,7 +319,7 @@ const Home: React.FC = () => {
                 <img 
                   src="/sma dedo.png" 
                   alt="Viajero haciendo dedo en la Patagonia" 
-                  className="rounded-xl shadow-2xl max-w-full h-auto animate-fade-in border-4 border-emerald-500"
+className="rounded-xl shadow-2xl max-w-full h-auto animate-fade-in"
                   style={{ maxHeight: '500px' }}
                 />
                 <div className="absolute -bottom-4 -right-4 bg-emerald-600 text-white p-3 rounded-lg shadow-lg">
