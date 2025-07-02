@@ -36,6 +36,14 @@ const TripCard: React.FC<TripCardProps> = ({
     try {
       let dateObj: Date;
       
+      console.log('🔧 TripCard formatDate INPUT:', { 
+        date, 
+        type: typeof date,
+        isDate: date instanceof Date,
+        tripId: trip.id,
+        isRecurring: trip.isRecurring 
+      });
+      
       if (typeof date === 'string') {
         // Si es string en formato YYYY-MM-DD, parsearlo como fecha local
         const parts = date.split('-');
@@ -76,14 +84,20 @@ const TripCard: React.FC<TripCardProps> = ({
       
       const formattedDate = `${day}/${month}/${year}`;
       
-      // 🔧 DEBUG: Log para verificar el formateo
-      console.log('🔧 TripCard formatDate:', {
+      // 🔧 DEBUG: Log detallado para identificar el problema
+      console.log('🔧 TripCard formatDate RESULTADO:', {
+        tripId: trip.id,
+        isRecurring: trip.isRecurring,
         input: date,
-        dateObj: dateObj.toISOString().split('T')[0],
-        formatted: formattedDate,
-        getDate: dateObj.getDate(),
-        getMonth: dateObj.getMonth() + 1,
-        getFullYear: dateObj.getFullYear()
+        inputType: typeof date,
+        dateObj: {
+          iso: dateObj.toISOString().split('T')[0],
+          getDate: dateObj.getDate(),
+          getMonth: dateObj.getMonth() + 1,
+          getFullYear: dateObj.getFullYear(),
+          toString: dateObj.toString()
+        },
+        formatted: formattedDate
       });
       
       return formattedDate;

@@ -4,7 +4,18 @@ import { Trip } from '../types';
 // Función helper para crear fecha local desde string YYYY-MM-DD
 export const createLocalDate = (dateString: string): Date => {
   const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
+  const date = new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
+  
+  console.log('🔧 createLocalDate:', {
+    input: dateString,
+    parsed: { year, month, day },
+    result: date.toISOString().split('T')[0],
+    getDate: date.getDate(),
+    getMonth: date.getMonth() + 1,
+    getFullYear: date.getFullYear()
+  });
+  
+  return date;
 };
 
 // 🔧 FUNCIÓN SIMPLIFICADA: Generar fechas recurrentes SIN lógica compleja
@@ -18,11 +29,13 @@ export const generateRecurringDates = (
   const start = createLocalDate(startDate);
   const end = endDate ? createLocalDate(endDate) : new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
   
-  console.log('🔧 Generando fechas recurrentes SIMPLIFICADO:', {
+  console.log('🔧 generateRecurringDates INPUT:', {
     startDate,
     endDate,
     recurrenceDays,
-    publishDaysBefore
+    publishDaysBefore,
+    startParsed: start.toISOString().split('T')[0],
+    endParsed: end.toISOString().split('T')[0]
   });
 
   // Mapeo de días en español a números (0 = domingo, 1 = lunes, etc.)
@@ -54,13 +67,25 @@ export const generateRecurringDates = (
       dates.push(dateString);
       generatedCount++;
       
-      console.log('✅ Fecha generada:', dateString, 'día de la semana:', currentDayNumber);
+      console.log('✅ Fecha generada:', {
+        dateString,
+        dayOfWeek: currentDayNumber,
+        currentDate: current.toISOString().split('T')[0],
+        getDate: current.getDate(),
+        getMonth: current.getMonth() + 1,
+        getFullYear: current.getFullYear()
+      });
     }
     
     current.setDate(current.getDate() + 1);
   }
 
-  console.log('🎯 Total fechas generadas:', dates.length);
+  console.log('🎯 generateRecurringDates OUTPUT:', {
+    totalGenerated: dates.length,
+    firstFew: dates.slice(0, 3),
+    lastFew: dates.slice(-3)
+  });
+  
   return dates;
 };
 
@@ -69,17 +94,43 @@ export const processFirestoreTrip = (doc: any, data: DocumentData): Trip | null 
   try {
     let departureDate: Date;
 
+    console.log('🔧 processFirestoreTrip INPUT:', {
+      docId: doc.id,
+      departureDateRaw: data.departureDate,
+      departureDateType: typeof data.departureDate,
+      hasToDate: typeof data.departureDate?.toDate === 'function',
+      isRecurring: data.isRecurring
+    });
+
     // Manejar diferentes formatos de fecha
     if (data.departureDate) {
       if (typeof data.departureDate.toDate === 'function') {
         // Es un Timestamp de Firestore
         departureDate = data.departureDate.toDate();
+        console.log('🔧 Timestamp convertido:', {
+          original: data.departureDate,
+          converted: departureDate.toISOString().split('T')[0],
+          getDate: departureDate.getDate(),
+          getMonth: departureDate.getMonth() + 1
+        });
       } else if (typeof data.departureDate === 'string') {
         // Es un string, convertir a Date local
         departureDate = createLocalDate(data.departureDate);
+        console.log('🔧 String convertido:', {
+          original: data.departureDate,
+          converted: departureDate.toISOString().split('T')[0],
+          getDate: departureDate.getDate(),
+          getMonth: departureDate.getMonth() + 1
+        });
       } else if (data.departureDate instanceof Date) {
         // Ya es un Date
         departureDate = data.departureDate;
+        console.log('🔧 Date directo:', {
+          original: data.departureDate,
+          iso: departureDate.toISOString().split('T')[0],
+          getDate: departureDate.getDate(),
+          getMonth: departureDate.getMonth() + 1
+        });
       } else {
         console.warn('Formato de fecha no reconocido:', data.departureDate);
         return null;
@@ -89,7 +140,7 @@ export const processFirestoreTrip = (doc: any, data: DocumentData): Trip | null 
       return null;
     }
 
-    return {
+    const trip = {
       id: doc.id,
       ...data,
       departureDate,
@@ -100,6 +151,17 @@ export const processFirestoreTrip = (doc: any, data: DocumentData): Trip | null 
         profilePicture: data.driver?.profilePicture || '',
       },
     } as Trip;
+
+    console.log('🔧 processFirestoreTrip OUTPUT:', {
+      tripId: trip.id,
+      isRecurring: trip.isRecurring,
+      departureDate: trip.departureDate.toISOString().split('T')[0],
+      getDate: trip.departureDate.getDate(),
+      getMonth: trip.departureDate.getMonth() + 1,
+      getFullYear: trip.departureDate.getFullYear()
+    });
+
+    return trip;
   } catch (error) {
     console.error('Error procesando viaje:', error, data);
     return null;
@@ -112,6 +174,13 @@ export const getNextTripDate = (recurrenceDays: string[], startDate: string): Da
   today.setHours(0, 0, 0, 0);
   
   const start = createLocalDate(startDate);
+  
+  console.log('🔧 getNextTripDate INPUT:', {
+    recurrenceDays,
+    startDate,
+    today: today.toISOString().split('T')[0],
+    start: start.toISOString().split('T')[0]
+  });
   
   // Mapeo de días en español a números
   const dayMapping: { [key: string]: number } = {
@@ -138,7 +207,12 @@ export const getNextTripDate = (recurrenceDays: string[], startDate: string): Da
     const dayNumber = checkDate.getDay();
     
     if (targetDayNumbers.includes(dayNumber)) {
-      console.log('🔧 Próximo viaje encontrado:', checkDate.toISOString().split('T')[0], 'día:', dayNumber);
+      console.log('🔧 getNextTripDate OUTPUT:', {
+        found: checkDate.toISOString().split('T')[0],
+        dayNumber,
+        getDate: checkDate.getDate(),
+        getMonth: checkDate.getMonth() + 1
+      });
       return checkDate;
     }
   }
