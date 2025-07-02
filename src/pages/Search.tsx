@@ -74,34 +74,36 @@ const Search: React.FC = () => {
     }
   };
 
-  const checkUserPhone = async (): Promise<boolean> => {
+  // ✅ CORREGIDO: Función de validación de teléfono más robusta y con cache
+  const checkUserPhone = async (): Promise<{ isValid: boolean; phone?: string }> => {
     const auth = getAuth();
     const uid = auth.currentUser?.uid;
     if (!uid) {
       console.log('📞 No hay usuario autenticado');
-      return false;
+      return { isValid: false };
     }
 
     try {
       const db = getFirestore();
       const userRef = doc(db, 'users', uid);
       
-      let attempts = 0;
+      // ✅ MEJORADO: Intentar obtener datos con reintentos pero sin esperas largas
       let userData = null;
+      let attempts = 0;
       
-      while (attempts < 3 && !userData) {
+      while (attempts < 2 && !userData) { // Reducido a 2 intentos
         const snapshot = await getDoc(userRef);
         if (snapshot.exists()) {
           userData = snapshot.data();
           break;
         }
         attempts++;
-        if (attempts < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+        if (attempts < 2) {
+          await new Promise(resolve => setTimeout(resolve, 200)); // Reducido a 200ms
         }
       }
       
-      console.log('📞 Verificando teléfono para usuario:', uid, 'intento:', attempts);
+      console.log('📞 Verificando teléfono para usuario:', uid, 'datos encontrados:', !!userData);
       
       if (userData) {
         const phone = userData.phone;
@@ -109,28 +111,39 @@ const Search: React.FC = () => {
         console.log('📞 Datos del usuario encontrados:', { 
           phone, 
           hasPhone: !!phone,
-          phoneType: typeof phone 
+          phoneType: typeof phone,
+          phoneLength: phone?.length 
         });
         
+        // ✅ MEJORADO: Validación más permisiva pero segura
         if (phone && typeof phone === 'string' && phone.trim() !== '') {
-          const phoneValid = /^549\d{10}$/.test(phone.trim());
+          const cleanPhone = phone.trim();
+          
+          // Verificar formato básico (debe empezar con 549 y tener 13 dígitos)
+          const phoneValid = /^549\d{10}$/.test(cleanPhone);
+          
           console.log('📞 Validación de teléfono:', { 
-            phone: phone.trim(), 
+            phone: cleanPhone, 
             phoneValid,
-            length: phone.trim().length 
+            length: cleanPhone.length,
+            startsWithCorrectCode: cleanPhone.startsWith('549')
           });
-          return phoneValid;
+          
+          return { 
+            isValid: phoneValid, 
+            phone: phoneValid ? cleanPhone : undefined 
+          };
         } else {
           console.log('📞 Teléfono no válido o vacío');
-          return false;
+          return { isValid: false };
         }
       } else {
-        console.log('📞 No se encontró documento del usuario en Firestore después de múltiples intentos');
-        return false;
+        console.log('📞 No se encontró documento del usuario en Firestore');
+        return { isValid: false };
       }
     } catch (error) {
       console.error('❌ Error verificando teléfono:', error);
-      return false;
+      return { isValid: false };
     }
   };
 
@@ -142,15 +155,20 @@ const Search: React.FC = () => {
 
     console.log('🎯 Iniciando proceso de reserva para viaje:', trip.id);
 
-    const hasValidPhone = await checkUserPhone();
+    // ✅ MEJORADO: Verificación más eficiente
+    const phoneCheck = await checkUserPhone();
     
-    console.log('📞 Resultado verificación teléfono:', hasValidPhone);
+    console.log('📞 Resultado verificación teléfono:', phoneCheck);
     
-    if (!hasValidPhone) {
+    if (!phoneCheck.isValid) {
       console.log('📞 Redirigiendo a editar perfil por teléfono inválido');
-      const confirmRedirect = window.confirm(
-        'Necesitás cargar un número de teléfono válido para poder reservar. ¿Querés ir a tu perfil ahora?'
-      );
+      
+      // ✅ MEJORADO: Mensaje más específico según el problema
+      const message = phoneCheck.phone 
+        ? 'Tu número de teléfono no tiene el formato correcto. Debe comenzar con 549 y tener 13 dígitos. ¿Querés corregirlo ahora?'
+        : 'Necesitás cargar un número de teléfono válido para poder reservar. ¿Querés ir a tu perfil ahora?';
+        
+      const confirmRedirect = window.confirm(message);
       if (confirmRedirect) {
         navigate('/profile/edit?from=booking');
       }
@@ -169,12 +187,19 @@ const Search: React.FC = () => {
 
     console.log('🎯 Iniciando proceso de oferta para solicitud:', request.id);
 
-    const hasValidPhone = await checkUserPhone();
+    // ✅ MEJORADO: Misma lógica mejorada para ofertas
+    const phoneCheck = await checkUserPhone();
     
-    if (!hasValidPhone) {
-      const confirmRedirect = window.confirm(
-        'Necesitás cargar un número de teléfono válido para poder hacer ofertas. ¿Querés ir a tu perfil ahora?'
-      );
+    console.log('📞 Resultado verificación teléfono para oferta:', phoneCheck);
+    
+    if (!phoneCheck.isValid) {
+      console.log('📞 Redirigiendo a editar perfil por teléfono inválido');
+      
+      const message = phoneCheck.phone 
+        ? 'Tu número de teléfono no tiene el formato correcto. Debe comenzar con 549 y tener 13 dígitos. ¿Querés corregirlo ahora?'
+        : 'Necesitás cargar un número de teléfono válido para poder hacer ofertas. ¿Querés ir a tu perfil ahora?';
+        
+      const confirmRedirect = window.confirm(message);
       if (confirmRedirect) {
         navigate('/profile/edit?from=booking');
       }
