@@ -63,11 +63,9 @@ interface TripState {
 // Función helper para convertir fecha string a Timestamp SIN problemas de timezone
 const convertDateToTimestamp = (dateInput: string | Date): Timestamp => {
   if (typeof dateInput === 'string') {
-    // 🔧 CORREGIDO: Usar createLocalDate para consistencia
     const date = createLocalDate(dateInput);
     return Timestamp.fromDate(date);
   } else {
-    // Si ya es Date, convertir directamente
     return Timestamp.fromDate(dateInput);
   }
 };
@@ -77,24 +75,12 @@ const processFirestorePassengerRequest = (doc: any, data: DocumentData): Passeng
   try {
     let departureDate: Date;
 
-    console.log('🔧 processFirestorePassengerRequest INPUT:', {
-      docId: doc.id,
-      departureDateRaw: data.departureDate,
-      departureDateType: typeof data.departureDate,
-      hasToDate: typeof data.departureDate?.toDate === 'function',
-      isRecurring: data.isRecurring
-    });
-
-    // Manejar diferentes formatos de fecha
     if (data.departureDate) {
       if (typeof data.departureDate.toDate === 'function') {
-        // Es un Timestamp de Firestore
         departureDate = data.departureDate.toDate();
       } else if (typeof data.departureDate === 'string') {
-        // Es un string, convertir a Date local
         departureDate = createLocalDate(data.departureDate);
       } else if (data.departureDate instanceof Date) {
-        // Ya es un Date
         departureDate = data.departureDate;
       } else {
         console.warn('Formato de fecha no reconocido en solicitud:', data.departureDate);
@@ -116,12 +102,6 @@ const processFirestorePassengerRequest = (doc: any, data: DocumentData): Passeng
         profilePicture: data.passenger?.profilePicture || '',
       },
     } as PassengerRequest;
-
-    console.log('🔧 processFirestorePassengerRequest OUTPUT:', {
-      requestId: request.id,
-      isRecurring: request.isRecurring,
-      departureDate: request.departureDate.toISOString().split('T')[0],
-    });
 
     return request;
   } catch (error) {
@@ -148,7 +128,6 @@ export const useTripStore = create<TripState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  // ✅ FUNCIÓN EXISTENTE MANTENIDA COMPLETA
   createTrip: async (tripData) => {
     set({ isLoading: true, error: null });
     try {
@@ -167,7 +146,6 @@ export const useTripStore = create<TripState>((set, get) => ({
           throw new Error('Fecha de inicio requerida para viajes recurrentes');
         }
 
-        // 🔧 CORREGIDO: Usar las fechas específicas generadas en CreateTrip
         const datesToCreate = recurringDates || [];
         
         if (datesToCreate.length === 0) {
@@ -179,7 +157,6 @@ export const useTripStore = create<TripState>((set, get) => ({
 
         console.log('🔧 Creando viajes recurrentes para fechas:', datesToCreate);
 
-        // 🔧 CORREGIDO: Crear un viaje por cada fecha específica
         for (const fechaString of datesToCreate) {
           const departureDateTimestamp = convertDateToTimestamp(fechaString);
 
@@ -191,7 +168,7 @@ export const useTripStore = create<TripState>((set, get) => ({
             createdAt: serverTimestamp(),
             isRecurring: true,
             recurrenceId,
-            tripType: 'driver_offer', // ✅ AGREGADO: Marcar como oferta de conductor
+            tripType: 'driver_offer',
             driver: {
               id: user.uid,
               name: user.displayName || '',
@@ -217,14 +194,12 @@ export const useTripStore = create<TripState>((set, get) => ({
 
         console.log('✅ Viajes recurrentes generados:', viajesGenerados.length);
 
-        // Actualizar estado con los nuevos viajes
         set((state) => ({
           trips: [...state.trips, ...viajesGenerados],
           myTrips: [...state.myTrips, ...viajesGenerados],
           isLoading: false,
         }));
 
-        // Refrescar grupos recurrentes
         get().fetchTrips();
 
         return viajesGenerados[0] || ({} as Trip);
@@ -243,7 +218,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           status: 'active',
           createdAt: serverTimestamp(),
           isRecurring: false,
-          tripType: 'driver_offer', // ✅ AGREGADO: Marcar como oferta de conductor
+          tripType: 'driver_offer',
           driver: {
             id: user.uid,
             name: user.displayName || '',
@@ -280,7 +255,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Crear solicitud de pasajero
   createPassengerRequest: async (requestData) => {
     set({ isLoading: true, error: null });
     try {
@@ -346,14 +320,12 @@ export const useTripStore = create<TripState>((set, get) => ({
 
         console.log('✅ Solicitudes recurrentes generadas:', solicitudesGeneradas.length);
 
-        // Actualizar estado con las nuevas solicitudes
         set((state) => ({
           passengerRequests: [...state.passengerRequests, ...solicitudesGeneradas],
           myPassengerRequests: [...state.myPassengerRequests, ...solicitudesGeneradas],
           isLoading: false,
         }));
 
-        // Refrescar solicitudes
         get().fetchPassengerRequests();
 
         return solicitudesGeneradas[0] || ({} as PassengerRequest);
@@ -408,7 +380,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ FUNCIÓN EXISTENTE MANTENIDA COMPLETA
   fetchTrips: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -425,12 +396,9 @@ export const useTripStore = create<TripState>((set, get) => ({
         })
         .filter((trip): trip is Trip => {
           if (!trip) return false;
-          
-          // Filtrar solo viajes futuros con asientos disponibles
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
-      // 🔧 SIMPLIFICADO: Para viajes recurrentes, mostrar solo el próximo viaje de cada grupo
       const recurringGroups = new Map<string, Trip>();
       const individualTrips: Trip[] = [];
 
@@ -438,23 +406,19 @@ export const useTripStore = create<TripState>((set, get) => ({
         if (trip.isRecurring && trip.recurrenceId) {
           const existingTrip = recurringGroups.get(trip.recurrenceId);
           if (!existingTrip || trip.departureDate < existingTrip.departureDate) {
-            // Guardar solo el viaje más próximo de cada grupo recurrente
             recurringGroups.set(trip.recurrenceId, trip);
           }
         } else {
-          // Viajes individuales se muestran todos
           individualTrips.push(trip);
         }
       });
 
-      // Combinar viajes individuales con próximos viajes recurrentes
       const finalTrips = [...individualTrips, ...Array.from(recurringGroups.values())];
 
       console.log('🔍 Viajes totales en Firebase:', allTrips.length);
       console.log('🔍 Viajes finales mostrados:', finalTrips.length);
       console.log('🔍 Viajes recurrentes únicos mostrados:', recurringGroups.size);
 
-      // Procesar grupos recurrentes para el dashboard
       const recurringGroupsForDashboard = new Map<string, RecurringTripGroup>();
       
       allTrips
@@ -503,7 +467,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Obtener solicitudes de pasajeros
   fetchPassengerRequests: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -520,12 +483,9 @@ export const useTripStore = create<TripState>((set, get) => ({
         })
         .filter((request): request is PassengerRequest => {
           if (!request) return false;
-          
-          // Filtrar solo solicitudes futuras activas
           return request.departureDate >= today && request.status === 'active';
         });
 
-      // Aplicar el mismo filtro que para viajes: mostrar solo una solicitud por grupo recurrente
       const recurringGroups = new Map<string, PassengerRequest>();
       const individualRequests: PassengerRequest[] = [];
 
@@ -533,16 +493,13 @@ export const useTripStore = create<TripState>((set, get) => ({
         if (request.isRecurring && request.recurrenceId) {
           const existingRequest = recurringGroups.get(request.recurrenceId);
           if (!existingRequest || request.departureDate < existingRequest.departureDate) {
-            // Guardar solo la solicitud más próxima de cada grupo recurrente
             recurringGroups.set(request.recurrenceId, request);
           }
         } else {
-          // Solicitudes individuales se muestran todas
           individualRequests.push(request);
         }
       });
 
-      // Combinar solicitudes individuales con próximas solicitudes recurrentes
       const finalRequests = [...individualRequests, ...Array.from(recurringGroups.values())];
 
       console.log('🔍 Solicitudes totales en Firebase:', allRequests.length);
@@ -562,7 +519,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ FUNCIONES EXISTENTES MANTENIDAS COMPLETAS
   fetchMyTrips: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -581,7 +537,6 @@ export const useTripStore = create<TripState>((set, get) => ({
         })
         .filter((trip): trip is Trip => trip !== null);
 
-      // Procesar mis grupos recurrentes
       const myRecurringGroups = new Map<string, RecurringTripGroup>();
       
       myTrips
@@ -629,7 +584,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Obtener mis solicitudes de pasajero
   fetchMyPassengerRequests: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -660,7 +614,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ FUNCIONES EXISTENTES MANTENIDAS COMPLETAS
   fetchMyBookings: async () => {
     set({ isLoading: true, error: null });
 
@@ -776,7 +729,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ FUNCIONES EXISTENTES MANTENIDAS
   filterTrips: (filters: TripFilters) => {
     const allTrips = get().trips;
     const filtered = allTrips.filter((trip) => {
@@ -791,7 +743,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({ filteredTrips: filtered });
   },
 
-  // ✅ NUEVA FUNCIÓN: Filtrar solicitudes de pasajeros
   filterPassengerRequests: (filters: TripFilters) => {
     const allRequests = get().passengerRequests;
     const filtered = allRequests.filter((request) => {
@@ -839,7 +790,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Crear oferta de conductor a solicitud de pasajero
   createDriverOffer: async (requestId: string, offerData: any) => {
     set({ isLoading: true, error: null });
     try {
@@ -886,7 +836,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Obtener mis ofertas como conductor
   fetchMyDriverOffers: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -930,7 +879,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Obtener ofertas recibidas como pasajero
   fetchReceivedDriverOffers: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -939,7 +887,6 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
-      // Primero obtener mis solicitudes
       const requestsQuery = query(collection(db, 'Passenger Requests'), where('passengerId', '==', user.uid));
       const requestsSnapshot = await getDocs(requestsQuery);
       const myRequestIds = requestsSnapshot.docs.map(doc => doc.id);
@@ -949,7 +896,6 @@ export const useTripStore = create<TripState>((set, get) => ({
         return;
       }
 
-      // Luego obtener ofertas para mis solicitudes
       const offersQuery = query(collection(db, 'Driver Offers'), where('requestId', 'in', myRequestIds));
       const offersSnapshot = await getDocs(offersQuery);
 
@@ -1000,7 +946,6 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  // ✅ NUEVA FUNCIÓN: Eliminar solicitud de pasajero
   deletePassengerRequest: async (requestId: string) => {
     const db = getFirestore();
     try {
@@ -1019,15 +964,12 @@ export const useTripStore = create<TripState>((set, get) => ({
   deleteRecurringGroup: async (recurrenceId: string) => {
     const db = getFirestore();
     try {
-      // Obtener todos los viajes con el mismo recurrenceId
       const q = query(collection(db, 'Post Trips'), where('recurrenceId', '==', recurrenceId));
       const snapshot = await getDocs(q);
 
-      // Eliminar todos los viajes del grupo
       const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
 
-      // Actualizar estado local
       set((state) => ({
         myTrips: state.myTrips.filter((trip) => trip.recurrenceId !== recurrenceId),
         trips: state.trips.filter((trip) => trip.recurrenceId !== recurrenceId),
