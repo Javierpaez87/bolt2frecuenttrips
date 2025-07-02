@@ -4,12 +4,14 @@ import Layout from '../components/layout/Layout';
 import TripFilter from '../components/trip/TripFilter';
 import TripCard from '../components/trip/TripCard';
 import BookingModal from '../components/trip/BookingModal';
+import DriverOfferModal from '../components/trip/DriverOfferModal';
 import { useTripStore } from '../store/tripStore';
 import { Trip, TripFilters, PassengerRequest } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { Calendar, Clock, DollarSign, MapPin, User as UserIcon } from 'lucide-react';
+import { Calendar, Clock, DollarSign, MapPin, User as UserIcon, Car } from 'lucide-react';
+import Button from '../components/ui/Button';
 
 const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -27,9 +29,11 @@ const Search: React.FC = () => {
     filterTrips,
     filterPassengerRequests,
     bookTrip,
+    createDriverOffer,
   } = useTripStore();
 
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<PassengerRequest | null>(null);
   const [searchType, setSearchType] = useState<'driver_offer' | 'passenger_request'>('driver_offer');
 
   useEffect(() => {
@@ -157,6 +161,30 @@ const Search: React.FC = () => {
     setSelectedTrip(trip);
   };
 
+  const handleOfferToRequest = async (request: PassengerRequest) => {
+    if (!isAuthenticated) {
+      navigate('/login?scrollToForm=true');
+      return;
+    }
+
+    console.log('🎯 Iniciando proceso de oferta para solicitud:', request.id);
+
+    const hasValidPhone = await checkUserPhone();
+    
+    if (!hasValidPhone) {
+      const confirmRedirect = window.confirm(
+        'Necesitás cargar un número de teléfono válido para poder hacer ofertas. ¿Querés ir a tu perfil ahora?'
+      );
+      if (confirmRedirect) {
+        navigate('/profile/edit?from=booking');
+      }
+      return;
+    }
+
+    console.log('✅ Teléfono válido, procediendo con oferta');
+    setSelectedRequest(request);
+  };
+
   const handleConfirmBooking = async (tripId: string, seats: number) => {
     try {
       await bookTrip(tripId, seats);
@@ -166,6 +194,18 @@ const Search: React.FC = () => {
     } catch (error) {
       console.error('Error al reservar:', error);
       alert('Ocurrió un error al reservar');
+    }
+  };
+
+  const handleConfirmOffer = async (requestId: string, offerData: any) => {
+    try {
+      await createDriverOffer(requestId, offerData);
+      alert('Oferta enviada al pasajero');
+      setSelectedRequest(null);
+      // Refrescar datos si es necesario
+    } catch (error) {
+      console.error('Error al enviar oferta:', error);
+      alert('Ocurrió un error al enviar la oferta');
     }
   };
 
@@ -305,7 +345,7 @@ const Search: React.FC = () => {
                               </div>
                             )}
 
-                            <div className="mt-4 flex justify-between items-center">
+                            <div className="mt-4 flex flex-col space-y-2">
                               <div className="flex space-x-2">
                                 <div className="flex items-center text-sm">
                                   <MapPin className="h-4 w-4 text-secondary-500 mr-1" />
@@ -318,36 +358,50 @@ const Search: React.FC = () => {
                                 </div>
                               </div>
 
-                              {request.passenger?.phone && (
-                                isAuthenticated ? (
-                                  <a
-                                    href={`https://wa.me/${request.passenger.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                                      `Hola ${request.passenger.name}, vi tu solicitud de viaje de ${request.origin} a ${request.destination} en BondiCar y me interesa hacer una oferta como conductor.`
-                                    )}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-green-500 rounded hover:bg-green-600 transition"
-                                  >
-                                    <svg
-                                      className="w-4 h-4 mr-1"
-                                      fill="currentColor"
-                                      viewBox="0 0 24 24"
+                              <div className="flex space-x-2">
+                                {/* Botón de WhatsApp */}
+                                {request.passenger?.phone && (
+                                  isAuthenticated ? (
+                                    <a
+                                      href={`https://wa.me/${request.passenger.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                        `Hola ${request.passenger.name}, vi tu solicitud de viaje de ${request.origin} a ${request.destination} en BondiCar y me interesa hacer una oferta como conductor.`
+                                      )}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-green-500 rounded hover:bg-green-600 transition"
                                     >
-                                      <path d="M16.403 12.675c-.245-.123-1.447-.713-1.672-.793-.225-.082-.39-.123-.555.123s-.637.793-.782.957c-.143.164-.287.184-.532.061-.245-.123-1.034-.381-1.97-1.215-.728-.649-1.219-1.451-1.36-1.696-.143-.246-.015-.379.107-.5.11-.109.245-.287.368-.43.123-.143.164-.245.246-.408.082-.163.041-.307-.02-.43-.061-.123-.555-1.336-.759-1.832-.2-.48-.403-.414-.555-.414h-.472c-.163 0-.429.061-.653.307s-.857.838-.857 2.043c0 1.205.877 2.367 1 .51.123 1.553 2.06 3.064 2.352 3.278.291.215 4.059 2.582 4.98 2.932.697.277 1.243.221 1.711.134.522-.097 1.447-.59 1.652-1.162.204-.572.204-1.062.143-1.162-.061-.1-.225-.163-.47-.286z" />
-                                      <path d="M12.005 2C6.487 2 2 6.486 2 12c0 1.995.584 3.842 1.59 5.403L2 22l4.74-1.563A9.956 9.956 0 0 0 12.005 22C17.514 22 22 17.514 22 12S17.514 2 12.005 2zm0 17.931a7.936 7.936 0 0 1-4.256-1.243l-.305-.184-2.815.927.923-2.74-.2-.312A7.932 7.932 0 0 1 4.065 12c0-4.384 3.56-7.937 7.94-7.937 4.374 0 7.933 3.553 7.933 7.937 0 4.379-3.553 7.931-7.933 7.931z" />
-                                    </svg>
-                                    Contactar
-                                  </a>
-                                ) : (
-                                  <button
-                                    onClick={() => alert("Necesitás iniciar sesión para contactar al pasajero.")}
-                                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-gray-400 rounded cursor-not-allowed"
-                                  >
-                                    <UserIcon className="w-4 h-4 mr-1" />
-                                    Contactar
-                                  </button>
-                                )
-                              )}
+                                      <svg
+                                        className="w-4 h-4 mr-1"
+                                        fill="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path d="M16.403 12.675c-.245-.123-1.447-.713-1.672-.793-.225-.082-.39-.123-.555.123s-.637.793-.782.957c-.143.164-.287.184-.532.061-.245-.123-1.034-.381-1.97-1.215-.728-.649-1.219-1.451-1.36-1.696-.143-.246-.015-.379.107-.5.11-.109.245-.287.368-.43.123-.143.164-.245.246-.408.082-.163.041-.307-.02-.43-.061-.123-.555-1.336-.759-1.832-.2-.48-.403-.414-.555-.414h-.472c-.163 0-.429.061-.653.307s-.857.838-.857 2.043c0 1.205.877 2.367 1 .51.123 1.553 2.06 3.064 2.352 3.278.291.215 4.059 2.582 4.98 2.932.697.277 1.243.221 1.711.134.522-.097 1.447-.59 1.652-1.162.204-.572.204-1.062.143-1.162-.061-.1-.225-.163-.47-.286z" />
+                                        <path d="M12.005 2C6.487 2 2 6.486 2 12c0 1.995.584 3.842 1.59 5.403L2 22l4.74-1.563A9.956 9.956 0 0 0 12.005 22C17.514 22 22 17.514 22 12S17.514 2 12.005 2zm0 17.931a7.936 7.936 0 0 1-4.256-1.243l-.305-.184-2.815.927.923-2.74-.2-.312A7.932 7.932 0 0 1 4.065 12c0-4.384 3.56-7.937 7.94-7.937 4.374 0 7.933 3.553 7.933 7.937 0 4.379-3.553 7.931-7.933 7.931z" />
+                                      </svg>
+                                      WhatsApp
+                                    </a>
+                                  ) : (
+                                    <button
+                                      onClick={() => alert("Necesitás iniciar sesión para contactar al pasajero.")}
+                                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-gray-400 rounded cursor-not-allowed"
+                                    >
+                                      <UserIcon className="w-4 h-4 mr-1" />
+                                      WhatsApp
+                                    </button>
+                                  )
+                                )}
+
+                                {/* Botón de Ofrecer Viaje */}
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleOfferToRequest(request)}
+                                  className="flex-1 bg-secondary-600 hover:bg-secondary-700"
+                                  icon={<Car className="h-4 w-4" />}
+                                >
+                                  Ofrecer Viaje
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -379,11 +433,21 @@ const Search: React.FC = () => {
         </div>
       </div>
 
+      {/* Modal para reservar viajes */}
       {selectedTrip && (
         <BookingModal
           trip={selectedTrip}
           onClose={() => setSelectedTrip(null)}
           onConfirm={handleConfirmBooking}
+        />
+      )}
+
+      {/* Modal para hacer ofertas */}
+      {selectedRequest && (
+        <DriverOfferModal
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          onConfirm={handleConfirmOffer}
         />
       )}
     </Layout>
