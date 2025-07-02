@@ -52,24 +52,6 @@ const convertDateToTimestamp = (dateInput: string | Date): Timestamp => {
   }
 };
 
-// 🔧 NUEVA FUNCIÓN: Filtrar solo viajes que deben ser visibles ahora
-const shouldTripBeVisible = (trip: Trip, publishDaysBefore: number = 3): boolean => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const tripDate = new Date(trip.departureDate);
-  tripDate.setHours(0, 0, 0, 0);
-  
-  // Calcular la fecha de publicación
-  const publishDate = new Date(tripDate);
-  publishDate.setDate(publishDate.getDate() - publishDaysBefore);
-  
-  // El viaje debe ser visible si:
-  // 1. La fecha de publicación ya llegó (hoy >= publishDate)
-  // 2. El viaje es futuro (tripDate >= today)
-  return today >= publishDate && tripDate >= today;
-};
-
 export const useTripStore = create<TripState>((set, get) => ({
   trips: [],
   myTrips: [],
@@ -230,23 +212,11 @@ export const useTripStore = create<TripState>((set, get) => ({
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
-      // 🔧 NUEVO: Filtrar viajes recurrentes por visibilidad
-      const visibleTrips = allTrips.filter(trip => {
-        if (!trip.isRecurring) {
-          // Viajes individuales siempre visibles si son futuros
-          return true;
-        } else {
-          // Viajes recurrentes: solo mostrar si deben ser visibles según publishDaysBefore
-          const publishDaysBefore = trip.publishDaysBefore || 3;
-          return shouldTripBeVisible(trip, publishDaysBefore);
-        }
-      });
-
-      // 🔧 NUEVO: Para viajes recurrentes, mostrar solo el próximo viaje de cada grupo
+      // 🔧 SIMPLIFICADO: Para viajes recurrentes, mostrar solo el próximo viaje de cada grupo
       const recurringGroups = new Map<string, Trip>();
       const individualTrips: Trip[] = [];
 
-      visibleTrips.forEach(trip => {
+      allTrips.forEach(trip => {
         if (trip.isRecurring && trip.recurrenceId) {
           const existingTrip = recurringGroups.get(trip.recurrenceId);
           if (!existingTrip || trip.departureDate < existingTrip.departureDate) {
@@ -263,7 +233,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       const finalTrips = [...individualTrips, ...Array.from(recurringGroups.values())];
 
       console.log('🔍 Viajes totales en Firebase:', allTrips.length);
-      console.log('🔍 Viajes visibles después de filtros:', finalTrips.length);
+      console.log('🔍 Viajes finales mostrados:', finalTrips.length);
       console.log('🔍 Viajes recurrentes únicos mostrados:', recurringGroups.size);
 
       // Procesar grupos recurrentes para el dashboard

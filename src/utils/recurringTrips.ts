@@ -7,7 +7,7 @@ export const createLocalDate = (dateString: string): Date => {
   return new Date(year, month - 1, day); // month - 1 porque Date usa 0-indexado
 };
 
-// 🔧 NUEVA FUNCIÓN: Generar fechas recurrentes con lógica mejorada
+// 🔧 FUNCIÓN SIMPLIFICADA: Generar fechas recurrentes SIN lógica compleja
 export const generateRecurringDates = (
   startDate: string, 
   endDate: string | undefined, 
@@ -17,40 +17,28 @@ export const generateRecurringDates = (
   const dates: string[] = [];
   const start = createLocalDate(startDate);
   const end = endDate ? createLocalDate(endDate) : new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
   
-  console.log('🔧 Generando fechas recurrentes:', {
+  console.log('🔧 Generando fechas recurrentes SIMPLIFICADO:', {
     startDate,
     endDate,
     recurrenceDays,
-    publishDaysBefore,
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0]
+    publishDaysBefore
   });
 
-  // Mapeo de días en español a inglés para consistencia
-  const dayMapping: { [key: string]: string } = {
-    'lunes': 'monday',
-    'martes': 'tuesday',
-    'miércoles': 'wednesday',
-    'jueves': 'thursday',
-    'viernes': 'friday',
-    'sábado': 'saturday',
-    'domingo': 'sunday'
+  // Mapeo de días en español a números (0 = domingo, 1 = lunes, etc.)
+  const dayMapping: { [key: string]: number } = {
+    'domingo': 0,
+    'lunes': 1,
+    'martes': 2,
+    'miércoles': 3,
+    'jueves': 4,
+    'viernes': 5,
+    'sábado': 6
   };
 
-  // Convertir días a inglés para usar con Date.getDay()
-  const targetDays = recurrenceDays.map(day => dayMapping[day] || day);
-  const targetDayNumbers = targetDays.map(day => {
-    const dayMap: { [key: string]: number } = {
-      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-      'thursday': 4, 'friday': 5, 'saturday': 6
-    };
-    return dayMap[day];
-  }).filter(num => num !== undefined);
-
-  console.log('🔧 Días objetivo (números):', targetDayNumbers);
+  const targetDayNumbers = recurrenceDays.map(day => dayMapping[day]).filter(num => num !== undefined);
+  
+  console.log('🔧 Días objetivo:', recurrenceDays, '→', targetDayNumbers);
 
   let current = new Date(start);
   let generatedCount = 0;
@@ -60,26 +48,19 @@ export const generateRecurringDates = (
     const currentDayNumber = current.getDay();
     
     if (targetDayNumbers.includes(currentDayNumber)) {
-      // 🔧 CORREGIDO: Solo crear viajes que deben publicarse ahora o en el futuro cercano
-      const publishDate = new Date(current);
-      publishDate.setDate(publishDate.getDate() - publishDaysBefore);
+      // 🔧 SIMPLIFICADO: Generar TODAS las fechas que coincidan con los días
+      // La lógica de "cuándo publicar" se maneja en el frontend, no aquí
+      const dateString = current.toISOString().split('T')[0];
+      dates.push(dateString);
+      generatedCount++;
       
-      // Solo agregar si la fecha de publicación es hoy o en el pasado (ya debe estar visible)
-      if (publishDate <= today) {
-        const dateString = current.toISOString().split('T')[0];
-        dates.push(dateString);
-        generatedCount++;
-        
-        console.log('✅ Fecha generada para publicar:', dateString, 'día de la semana:', currentDayNumber);
-      } else {
-        console.log('⏳ Fecha futura, no se publica aún:', current.toISOString().split('T')[0]);
-      }
+      console.log('✅ Fecha generada:', dateString, 'día de la semana:', currentDayNumber);
     }
     
     current.setDate(current.getDate() + 1);
   }
 
-  console.log('🎯 Total fechas a publicar ahora:', dates.length);
+  console.log('🎯 Total fechas generadas:', dates.length);
   return dates;
 };
 
@@ -125,7 +106,7 @@ export const processFirestoreTrip = (doc: any, data: DocumentData): Trip | null 
   }
 };
 
-// 🔧 FUNCIÓN MEJORADA: Obtener próxima fecha de viaje recurrente
+// 🔧 FUNCIÓN SIMPLIFICADA: Obtener próxima fecha de viaje recurrente
 export const getNextTripDate = (recurrenceDays: string[], startDate: string): Date => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -134,31 +115,29 @@ export const getNextTripDate = (recurrenceDays: string[], startDate: string): Da
   
   // Mapeo de días en español a números
   const dayMapping: { [key: string]: number } = {
-    'lunes': 1, 'martes': 2, 'miércoles': 3, 'jueves': 4,
-    'viernes': 5, 'sábado': 6, 'domingo': 0
+    'domingo': 0,
+    'lunes': 1,
+    'martes': 2,
+    'miércoles': 3,
+    'jueves': 4,
+    'viernes': 5,
+    'sábado': 6
   };
 
   const targetDayNumbers = recurrenceDays.map(day => dayMapping[day]).filter(num => num !== undefined);
   
   console.log('🔧 getNextTripDate - días objetivo:', recurrenceDays, '→', targetDayNumbers);
   
-  // Si la fecha de inicio es futura y coincide con un día de recurrencia
-  if (start > today) {
-    const startDayNumber = start.getDay();
-    if (targetDayNumbers.includes(startDayNumber)) {
-      console.log('🔧 Próximo viaje es la fecha de inicio:', start.toISOString().split('T')[0]);
-      return start;
-    }
-  }
+  // 🔧 SIMPLIFICADO: Buscar desde la fecha de inicio hacia adelante
+  let current = new Date(Math.max(start.getTime(), today.getTime()));
   
-  // Buscar el próximo día que coincida con la recurrencia
   for (let i = 0; i < 14; i++) {
-    const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() + i);
+    const checkDate = new Date(current);
+    checkDate.setDate(current.getDate() + i);
     
     const dayNumber = checkDate.getDay();
     
-    if (targetDayNumbers.includes(dayNumber) && checkDate >= start) {
+    if (targetDayNumbers.includes(dayNumber)) {
       console.log('🔧 Próximo viaje encontrado:', checkDate.toISOString().split('T')[0], 'día:', dayNumber);
       return checkDate;
     }
