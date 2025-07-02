@@ -5,10 +5,11 @@ import TripFilter from '../components/trip/TripFilter';
 import TripCard from '../components/trip/TripCard';
 import BookingModal from '../components/trip/BookingModal';
 import { useTripStore } from '../store/tripStore';
-import { Trip, TripFilters } from '../types';
+import { Trip, TripFilters, PassengerRequest } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { Calendar, Clock, DollarSign, MapPin, User as UserIcon } from 'lucide-react';
 
 const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -17,37 +18,58 @@ const Search: React.FC = () => {
   const {
     trips,
     filteredTrips,
+    passengerRequests,
+    filteredPassengerRequests,
     isLoading,
     error,
     fetchTrips,
+    fetchPassengerRequests,
     filterTrips,
+    filterPassengerRequests,
     bookTrip,
   } = useTripStore();
 
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [searchType, setSearchType] = useState<'driver_offer' | 'passenger_request'>('driver_offer');
 
   useEffect(() => {
     fetchTrips();
-  }, [fetchTrips]);
+    fetchPassengerRequests();
+  }, [fetchTrips, fetchPassengerRequests]);
 
   useEffect(() => {
     const origin = searchParams.get('origin')?.toLowerCase().trim();
     const destination = searchParams.get('destination')?.toLowerCase().trim();
+    const tripType = searchParams.get('tripType') as 'driver_offer' | 'passenger_request';
+
+    // Establecer el tipo de búsqueda desde URL
+    if (tripType) {
+      setSearchType(tripType);
+    }
 
     if (origin || destination) {
       const initialFilters: TripFilters = {
         origin: origin || undefined,
         destination: destination || undefined,
       };
-      filterTrips(initialFilters);
+      
+      // Filtrar según el tipo
+      if (tripType === 'passenger_request') {
+        filterPassengerRequests(initialFilters);
+      } else {
+        filterTrips(initialFilters);
+      }
     }
-  }, [searchParams, filterTrips]);
+  }, [searchParams, filterTrips, filterPassengerRequests]);
 
   const handleFilter = (filters: TripFilters) => {
-    filterTrips(filters);
+    if (searchType === 'passenger_request') {
+      filterPassengerRequests(filters);
+    } else {
+      filterTrips(filters);
+    }
   };
 
-  // ✅ MEJORADO: Verificar teléfono con validación más robusta y múltiples intentos
   const checkUserPhone = async (): Promise<boolean> => {
     const auth = getAuth();
     const uid = auth.currentUser?.uid;
@@ -60,7 +82,6 @@ const Search: React.FC = () => {
       const db = getFirestore();
       const userRef = doc(db, 'users', uid);
       
-      // ✅ NUEVO: Intentar múltiples veces para asegurar que obtenemos los datos más recientes
       let attempts = 0;
       let userData = null;
       
@@ -72,7 +93,7 @@ const Search: React.FC = () => {
         }
         attempts++;
         if (attempts < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500)); // Esperar 500ms entre intentos
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
@@ -87,7 +108,6 @@ const Search: React.FC = () => {
           phoneType: typeof phone 
         });
         
-        // Verificar que el teléfono existe y tiene el formato correcto
         if (phone && typeof phone === 'string' && phone.trim() !== '') {
           const phoneValid = /^549\d{10}$/.test(phone.trim());
           console.log('📞 Validación de teléfono:', { 
@@ -118,7 +138,6 @@ const Search: React.FC = () => {
 
     console.log('🎯 Iniciando proceso de reserva para viaje:', trip.id);
 
-    // ✅ MEJORADO: Verificar teléfono con múltiples intentos
     const hasValidPhone = await checkUserPhone();
     
     console.log('📞 Resultado verificación teléfono:', hasValidPhone);
@@ -143,7 +162,6 @@ const Search: React.FC = () => {
       await bookTrip(tripId, seats);
       alert('Reserva enviada al conductor');
       setSelectedTrip(null);
-      // Refrescar los datos para actualizar asientos disponibles
       fetchTrips();
     } catch (error) {
       console.error('Error al reservar:', error);
@@ -151,24 +169,63 @@ const Search: React.FC = () => {
     }
   };
 
-  // 🔧 SIMPLIFICADO: Todos los viajes se muestran igual (sin distinción de recurrentes)
-  const tripsToShow = filteredTrips;
+  // Función para formatear fecha
+  const formatDate = (date: Date): string => {
+    try {
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      return 'Fecha inválida';
+    }
+  };
+
+  // Determinar qué mostrar según el tipo de búsqueda
+  const contentToShow = searchType === 'passenger_request' ? filteredPassengerRequests : filteredTrips;
+  const totalCount = searchType === 'passenger_request' ? passengerRequests.length : trips.length;
 
   return (
     <Layout>
       <div className="bg-gray-50 py-8">
         <div className="container mx-auto px-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">
-            Buscar Viajes
-          </h1>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 md:mb-0">
+              {searchType === 'passenger_request' ? 'Buscar Solicitudes de Pasajeros' : 'Buscar Viajes'}
+            </h1>
+
+            {/* Selector de tipo de búsqueda */}
+            <div className="flex bg-white rounded-lg border border-gray-300 p-1">
+              <button
+                onClick={() => setSearchType('driver_offer')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  searchType === 'driver_offer'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-700 hover:text-primary-600'
+                }`}
+              >
+                Viajes de Conductores
+              </button>
+              <button
+                onClick={() => setSearchType('passenger_request')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  searchType === 'passenger_request'
+                    ? 'bg-secondary-500 text-white'
+                    : 'text-gray-700 hover:text-secondary-600'
+                }`}
+              >
+                Solicitudes de Pasajeros
+              </button>
+            </div>
+          </div>
 
           <TripFilter onFilter={handleFilter} />
 
           <div className="mb-4">
             <h2 className="text-xl font-semibold text-gray-900">
               {isLoading
-                ? 'Cargando viajes...'
-                : `${tripsToShow.length} viajes encontrados`}
+                ? 'Cargando...'
+                : `${contentToShow.length} ${searchType === 'passenger_request' ? 'solicitudes' : 'viajes'} encontrados`}
             </h2>
           </div>
 
@@ -184,24 +241,136 @@ const Search: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* 🔧 SIMPLIFICADO: Todos los viajes se muestran igual */}
-              {tripsToShow.length > 0 ? (
+              {contentToShow.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {tripsToShow.map((trip) => (
-                    <TripCard
-                      key={trip.id}
-                      trip={trip}
-                      onBook={handleBookTrip}
-                    />
-                  ))}
+                  {searchType === 'passenger_request' ? (
+                    // Mostrar solicitudes de pasajeros
+                    (contentToShow as PassengerRequest[]).map((request) => (
+                      <div
+                        key={request.id}
+                        className="bg-white rounded-lg shadow-card hover:shadow-card-hover transition-shadow p-4 border-l-4 border-secondary-500"
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className="flex-shrink-0">
+                            <div className="h-12 w-12 rounded-full overflow-hidden">
+                              {request.passenger?.profilePicture ? (
+                                <img
+                                  src={request.passenger.profilePicture}
+                                  alt={request.passenger.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full bg-secondary-100 flex items-center justify-center">
+                                  <span className="text-secondary-600 font-medium">
+                                    {request.passenger?.name?.substring(0, 2).toUpperCase() || 'PA'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg text-gray-900">
+                              {request.origin} → {request.destination}
+                            </h3>
+                            
+                            <p className="text-sm text-gray-500 mt-1">
+                              Solicita: {request.passenger?.name || 'Pasajero'}
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-2 mt-3">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Calendar className="h-4 w-4 text-secondary-500 mr-1" />
+                                <span>{formatDate(request.departureDate)}</span>
+                              </div>
+
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Clock className="h-4 w-4 text-secondary-500 mr-1" />
+                                <span>{request.departureTime}</span>
+                              </div>
+                            </div>
+
+                            {request.maxPrice && (
+                              <div className="flex items-center text-sm text-gray-600 mt-1">
+                                <DollarSign className="h-4 w-4 text-secondary-500 mr-1" />
+                                <span>Hasta ${request.maxPrice}</span>
+                              </div>
+                            )}
+
+                            {request.description && (
+                              <div className="mt-3">
+                                <p className="text-sm text-gray-700 line-clamp-2">
+                                  <strong>Comentarios:</strong> {request.description}
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="mt-4 flex justify-between items-center">
+                              <div className="flex space-x-2">
+                                <div className="flex items-center text-sm">
+                                  <MapPin className="h-4 w-4 text-secondary-500 mr-1" />
+                                  <span className="text-gray-600">{request.origin}</span>
+                                </div>
+                                <span className="text-gray-400">→</span>
+                                <div className="flex items-center text-sm">
+                                  <MapPin className="h-4 w-4 text-secondary-500 mr-1" />
+                                  <span className="text-gray-600">{request.destination}</span>
+                                </div>
+                              </div>
+
+                              {request.passenger?.phone && (
+                                isAuthenticated ? (
+                                  <a
+                                    href={`https://wa.me/${request.passenger.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                      `Hola ${request.passenger.name}, vi tu solicitud de viaje de ${request.origin} a ${request.destination} en BondiCar y me interesa hacer una oferta como conductor.`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-green-500 rounded hover:bg-green-600 transition"
+                                  >
+                                    <svg
+                                      className="w-4 h-4 mr-1"
+                                      fill="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path d="M16.403 12.675c-.245-.123-1.447-.713-1.672-.793-.225-.082-.39-.123-.555.123s-.637.793-.782.957c-.143.164-.287.184-.532.061-.245-.123-1.034-.381-1.97-1.215-.728-.649-1.219-1.451-1.36-1.696-.143-.246-.015-.379.107-.5.11-.109.245-.287.368-.43.123-.143.164-.245.246-.408.082-.163.041-.307-.02-.43-.061-.123-.555-1.336-.759-1.832-.2-.48-.403-.414-.555-.414h-.472c-.163 0-.429.061-.653.307s-.857.838-.857 2.043c0 1.205.877 2.367 1 .51.123 1.553 2.06 3.064 2.352 3.278.291.215 4.059 2.582 4.98 2.932.697.277 1.243.221 1.711.134.522-.097 1.447-.59 1.652-1.162.204-.572.204-1.062.143-1.162-.061-.1-.225-.163-.47-.286z" />
+                                      <path d="M12.005 2C6.487 2 2 6.486 2 12c0 1.995.584 3.842 1.59 5.403L2 22l4.74-1.563A9.956 9.956 0 0 0 12.005 22C17.514 22 22 17.514 22 12S17.514 2 12.005 2zm0 17.931a7.936 7.936 0 0 1-4.256-1.243l-.305-.184-2.815.927.923-2.74-.2-.312A7.932 7.932 0 0 1 4.065 12c0-4.384 3.56-7.937 7.94-7.937 4.374 0 7.933 3.553 7.933 7.937 0 4.379-3.553 7.931-7.933 7.931z" />
+                                    </svg>
+                                    Contactar
+                                  </a>
+                                ) : (
+                                  <button
+                                    onClick={() => alert("Necesitás iniciar sesión para contactar al pasajero.")}
+                                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-gray-400 rounded cursor-not-allowed"
+                                  >
+                                    <UserIcon className="w-4 h-4 mr-1" />
+                                    Contactar
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    // Mostrar viajes de conductores
+                    (contentToShow as Trip[]).map((trip) => (
+                      <TripCard
+                        key={trip.id}
+                        trip={trip}
+                        onBook={handleBookTrip}
+                      />
+                    ))
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-12">
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No se encontraron viajes
+                    No se encontraron {searchType === 'passenger_request' ? 'solicitudes' : 'viajes'}
                   </h3>
                   <p className="text-gray-600">
-                    Intenta con otros filtros o crea un nuevo viaje.
+                    Intenta con otros filtros o crea {searchType === 'passenger_request' ? 'una nueva solicitud' : 'un nuevo viaje'}.
                   </p>
                 </div>
               )}
