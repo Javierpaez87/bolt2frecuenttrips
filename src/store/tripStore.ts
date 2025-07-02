@@ -822,6 +822,22 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
+      // ✅ CORREGIDO: Obtener teléfono del perfil del usuario
+      console.log('📞 Obteniendo teléfono del conductor para la oferta...');
+      
+      let driverPhone = '';
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          driverPhone = userData.phone || '';
+          console.log('📞 Teléfono del conductor obtenido:', driverPhone);
+        }
+      } catch (phoneError) {
+        console.error('❌ Error obteniendo teléfono del conductor:', phoneError);
+      }
+
       const fullOffer = {
         ...offerData,
         requestId,
@@ -832,10 +848,17 @@ export const useTripStore = create<TripState>((set, get) => ({
           id: user.uid,
           name: user.displayName || '',
           email: user.email || '',
-          phone: offerData.phone || '',
+          phone: driverPhone, // ✅ CORREGIDO: Usar teléfono del perfil
           profilePicture: user.photoURL || '',
         },
       };
+
+      console.log('📞 Datos completos de la oferta:', {
+        driverId: user.uid,
+        driverName: user.displayName,
+        driverPhone: driverPhone,
+        requestId
+      });
 
       const docRef = await addDoc(collection(db, 'Driver Offers'), fullOffer);
 
@@ -886,13 +909,36 @@ export const useTripStore = create<TripState>((set, get) => ({
           }
         }
 
+        // ✅ CORREGIDO: Asegurar que el teléfono del conductor esté presente
+        let driverInfo = data.driver || {};
+        if (!driverInfo.phone) {
+          try {
+            const userRef = doc(db, 'users', data.driverId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              driverInfo.phone = userData.phone || '';
+              console.log('📞 Teléfono del conductor recuperado desde perfil:', userData.phone);
+            }
+          } catch (phoneError) {
+            console.error('❌ Error recuperando teléfono del conductor:', phoneError);
+          }
+        }
+
         offers.push({
           id: docSnap.id,
           ...data,
+          driver: driverInfo,
           createdAt: data.createdAt?.toDate?.() || new Date(),
           request,
         });
       }
+
+      console.log('📞 Ofertas del conductor cargadas:', offers.map(o => ({
+        id: o.id,
+        driverPhone: o.driver?.phone,
+        driverName: o.driver?.name
+      })));
 
       set({ myDriverOffers: offers, isLoading: false });
     } catch (error) {
@@ -938,13 +984,37 @@ export const useTripStore = create<TripState>((set, get) => ({
           }
         }
 
+        // ✅ CORREGIDO: Asegurar que el teléfono del conductor esté presente
+        let driverInfo = data.driver || {};
+        if (!driverInfo.phone && data.driverId) {
+          try {
+            const userRef = doc(db, 'users', data.driverId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              driverInfo.phone = userData.phone || '';
+              console.log('📞 Teléfono del conductor recuperado desde perfil para oferta recibida:', userData.phone);
+            }
+          } catch (phoneError) {
+            console.error('❌ Error recuperando teléfono del conductor:', phoneError);
+          }
+        }
+
         offers.push({
           id: docSnap.id,
           ...data,
+          driver: driverInfo,
           createdAt: data.createdAt?.toDate?.() || new Date(),
           request,
         });
       }
+
+      console.log('📞 Ofertas recibidas cargadas:', offers.map(o => ({
+        id: o.id,
+        driverPhone: o.driver?.phone,
+        driverName: o.driver?.name,
+        status: o.status
+      })));
 
       set({ receivedDriverOffers: offers, isLoading: false });
     } catch (error) {
