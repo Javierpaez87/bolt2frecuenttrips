@@ -15,7 +15,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { Trip, Booking, TripFilters, RecurringTripGroup } from '../types';
+import { Trip, Booking, TripFilters, RecurringTripGroup, PassengerRequest, DriverOffer } from '../types';
 import { processFirestoreTrip, getNextTripDate, createLocalDate } from '../utils/recurringTrips';
 
 interface TripState {
@@ -25,8 +25,18 @@ interface TripState {
   myRecurringGroups: RecurringTripGroup[];
   filteredTrips: Trip[];
   recurringGroups: RecurringTripGroup[];
+  
+  // ✅ NUEVO: Estados para solicitudes de pasajeros
+  passengerRequests: PassengerRequest[];
+  myPassengerRequests: PassengerRequest[];
+  driverOffers: DriverOffer[];
+  myDriverOffers: DriverOffer[];
+  receivedOffers: DriverOffer[]; // Ofertas recibidas como pasajero
+  
   isLoading: boolean;
   error: string | null;
+  
+  // Funciones existentes
   createTrip: (tripData: any) => Promise<Trip>;
   fetchTrips: () => Promise<void>;
   fetchMyTrips: () => Promise<void>;
@@ -38,6 +48,16 @@ interface TripState {
   deleteRecurringGroup: (recurrenceId: string) => Promise<void>;
   clearFilteredTrips: () => void;
   cancelBooking: (bookingId: string) => Promise<void>;
+  
+  // ✅ NUEVAS: Funciones para solicitudes de pasajeros
+  createPassengerRequest: (requestData: any) => Promise<PassengerRequest>;
+  fetchPassengerRequests: () => Promise<void>;
+  fetchMyPassengerRequests: () => Promise<void>;
+  createDriverOffer: (offerId: string, offerData: any) => Promise<void>;
+  fetchMyDriverOffers: () => Promise<void>;
+  fetchReceivedOffers: () => Promise<void>;
+  acceptDriverOffer: (offerId: string) => Promise<void>;
+  rejectDriverOffer: (offerId: string) => Promise<void>;
 }
 
 // Función helper para convertir fecha string a Timestamp SIN problemas de timezone
@@ -59,6 +79,14 @@ export const useTripStore = create<TripState>((set, get) => ({
   myRecurringGroups: [],
   filteredTrips: [],
   recurringGroups: [],
+  
+  // ✅ NUEVO: Estados iniciales para solicitudes
+  passengerRequests: [],
+  myPassengerRequests: [],
+  driverOffers: [],
+  myDriverOffers: [],
+  receivedOffers: [],
+  
   isLoading: false,
   error: null,
 
@@ -104,6 +132,7 @@ export const useTripStore = create<TripState>((set, get) => ({
             createdAt: serverTimestamp(),
             isRecurring: true,
             recurrenceId,
+            tripType: 'driver_offer', // ✅ NUEVO: Marcar como oferta de conductor
             driver: {
               id: user.uid,
               name: user.displayName || '',
@@ -155,6 +184,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           status: 'active',
           createdAt: serverTimestamp(),
           isRecurring: false,
+          tripType: 'driver_offer', // ✅ NUEVO: Marcar como oferta de conductor
           driver: {
             id: user.uid,
             name: user.displayName || '',
@@ -185,6 +215,127 @@ export const useTripStore = create<TripState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Error al crear viaje',
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  // ✅ NUEVA: Crear solicitud de pasajero
+  createPassengerRequest: async (requestData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const db = getFirestore();
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error('No estás autenticado');
+
+      console.log('📦 Creando solicitud de pasajero con datos:', requestData);
+
+      // Si es solicitud recurrente, generar múltiples solicitudes
+      if (requestData.isRecurring && requestData.recurrenceDays?.length > 0) {
+        const { recurrenceStartDate, recurrenceEndDate, recurrenceDays, recurringDates } = requestData;
+        
+        if (!recurrenceStartDate) {
+          throw new Error('Fecha de inicio requerida para solicitudes recurrentes');
+        }
+
+        const datesToCreate = recurringDates || [];
+        
+        if (datesToCreate.length === 0) {
+          throw new Error('No se generaron fechas para la solicitud recurrente');
+        }
+
+        const recurrenceId = `req-${requestData.origin}-${requestData.destination}-${recurrenceStartDate}-${Date.now()}`;
+        const solicitudesGeneradas = [];
+
+        console.log('🔧 Creando solicitudes recurrentes para fechas:', datesToCreate);
+
+        for (const fechaString of datesToCreate) {
+          const departureDateTimestamp = convertDateToTimestamp(fechaString);
+
+          const fullRequest = {
+            ...requestData,
+            departureDate: departureDateTimestamp,
+            passengerId: user.uid,
+            status: 'active',
+            createdAt: serverTimestamp(),
+            isRecurring: true,
+            recurrenceId,
+            passenger: {
+              id: user.uid,
+              name: user.displayName || '',
+              email: user.email || '',
+              phone: requestData.phone || '',
+              profilePicture: user.photoURL || '',
+            },
+          };
+
+          const docRef = await addDoc(collection(db, 'Passenger Requests'), fullRequest);
+          
+          const request: PassengerRequest = {
+            id: docRef.id,
+            ...fullRequest,
+            departureDate: departureDateTimestamp.toDate(),
+            createdAt: new Date(),
+          };
+
+          solicitudesGeneradas.push(request);
+        }
+
+        console.log('✅ Solicitudes recurrentes generadas:', solicitudesGeneradas.length);
+
+        set((state) => ({
+          passengerRequests: [...state.passengerRequests, ...solicitudesGeneradas],
+          myPassengerRequests: [...state.myPassengerRequests, ...solicitudesGeneradas],
+          isLoading: false,
+        }));
+
+        return solicitudesGeneradas[0] || ({} as PassengerRequest);
+      } else {
+        // Solicitud individual
+        if (!requestData.departureDate) {
+          throw new Error('Fecha de salida requerida para solicitudes individuales');
+        }
+
+        const departureDateTimestamp = convertDateToTimestamp(requestData.departureDate);
+
+        const fullRequest = {
+          ...requestData,
+          departureDate: departureDateTimestamp,
+          passengerId: user.uid,
+          status: 'active',
+          createdAt: serverTimestamp(),
+          isRecurring: false,
+          passenger: {
+            id: user.uid,
+            name: user.displayName || '',
+            email: user.email || '',
+            phone: requestData.phone || '',
+            profilePicture: user.photoURL || '',
+          },
+        };
+
+        const docRef = await addDoc(collection(db, 'Passenger Requests'), fullRequest);
+
+        const request: PassengerRequest = {
+          id: docRef.id,
+          ...fullRequest,
+          departureDate: departureDateTimestamp.toDate(),
+          createdAt: new Date(),
+        };
+
+        set((state) => ({
+          passengerRequests: [...state.passengerRequests, request],
+          myPassengerRequests: [...state.myPassengerRequests, request],
+          isLoading: false,
+        }));
+
+        return request;
+      }
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error al crear solicitud',
         isLoading: false,
       });
       throw error;
@@ -285,6 +436,49 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA: Obtener solicitudes de pasajeros
+  fetchPassengerRequests: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const db = getFirestore();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const snapshot = await getDocs(collection(db, 'Passenger Requests'));
+
+      const requests: PassengerRequest[] = snapshot.docs
+        .map((doc) => {
+          const data = doc.data() as DocumentData;
+          
+          let departureDate: Date;
+          if (data.departureDate?.toDate) {
+            departureDate = data.departureDate.toDate();
+          } else if (typeof data.departureDate === 'string') {
+            departureDate = createLocalDate(data.departureDate);
+          } else {
+            return null;
+          }
+
+          return {
+            id: doc.id,
+            ...data,
+            departureDate,
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+          } as PassengerRequest;
+        })
+        .filter((request): request is PassengerRequest => {
+          return request !== null && request.departureDate >= today;
+        });
+
+      set({ passengerRequests: requests, isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error al obtener solicitudes',
+        isLoading: false,
+      });
+    }
+  },
+
   fetchMyTrips: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -346,6 +540,246 @@ export const useTripStore = create<TripState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Error al obtener mis viajes',
+        isLoading: false,
+      });
+    }
+  },
+
+  // ✅ NUEVA: Obtener mis solicitudes como pasajero
+  fetchMyPassengerRequests: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const db = getFirestore();
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error('No estás autenticado');
+
+      const q = query(collection(db, 'Passenger Requests'), where('passengerId', '==', user.uid));
+      const snapshot = await getDocs(q);
+
+      const myRequests: PassengerRequest[] = snapshot.docs
+        .map((doc) => {
+          const data = doc.data() as DocumentData;
+          
+          let departureDate: Date;
+          if (data.departureDate?.toDate) {
+            departureDate = data.departureDate.toDate();
+          } else if (typeof data.departureDate === 'string') {
+            departureDate = createLocalDate(data.departureDate);
+          } else {
+            return null;
+          }
+
+          return {
+            id: doc.id,
+            ...data,
+            departureDate,
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+          } as PassengerRequest;
+        })
+        .filter((request): request is PassengerRequest => request !== null);
+
+      set({ myPassengerRequests: myRequests, isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error al obtener mis solicitudes',
+        isLoading: false,
+      });
+    }
+  },
+
+  // ✅ NUEVA: Crear oferta de conductor
+  createDriverOffer: async (requestId: string, offerData: any) => {
+    set({ isLoading: true, error: null });
+    try {
+      const db = getFirestore();
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error('No estás autenticado');
+
+      const fullOffer = {
+        ...offerData,
+        requestId,
+        driverId: user.uid,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        driver: {
+          id: user.uid,
+          name: user.displayName || '',
+          email: user.email || '',
+          phone: offerData.phone || '',
+          profilePicture: user.photoURL || '',
+        },
+      };
+
+      await addDoc(collection(db, 'Driver Offers'), fullOffer);
+      set({ isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error al crear oferta',
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  // ✅ NUEVA: Obtener ofertas recibidas como pasajero
+  fetchReceivedOffers: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const db = getFirestore();
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error('No estás autenticado');
+
+      // Primero obtener mis solicitudes
+      const requestsQuery = query(collection(db, 'Passenger Requests'), where('passengerId', '==', user.uid));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      const myRequestIds = requestsSnapshot.docs.map(doc => doc.id);
+
+      if (myRequestIds.length === 0) {
+        set({ receivedOffers: [], isLoading: false });
+        return;
+      }
+
+      // Luego obtener ofertas para mis solicitudes
+      const offersQuery = query(collection(db, 'Driver Offers'), where('requestId', 'in', myRequestIds));
+      const offersSnapshot = await getDocs(offersQuery);
+
+      const offers: DriverOffer[] = [];
+
+      for (const offerDoc of offersSnapshot.docs) {
+        const offerData = offerDoc.data();
+        
+        // Obtener la solicitud asociada
+        const requestDoc = requestsSnapshot.docs.find(doc => doc.id === offerData.requestId);
+        let request = null;
+        
+        if (requestDoc) {
+          const requestData = requestDoc.data();
+          let departureDate: Date;
+          
+          if (requestData.departureDate?.toDate) {
+            departureDate = requestData.departureDate.toDate();
+          } else if (typeof requestData.departureDate === 'string') {
+            departureDate = createLocalDate(requestData.departureDate);
+          } else {
+            continue;
+          }
+
+          request = {
+            id: requestDoc.id,
+            ...requestData,
+            departureDate,
+            createdAt: requestData.createdAt?.toDate?.() || new Date(),
+          } as PassengerRequest;
+        }
+
+        offers.push({
+          id: offerDoc.id,
+          ...offerData,
+          request,
+          createdAt: offerData.createdAt?.toDate?.() || new Date(),
+        } as DriverOffer);
+      }
+
+      set({ receivedOffers: offers, isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error al obtener ofertas recibidas',
+        isLoading: false,
+      });
+    }
+  },
+
+  // ✅ NUEVA: Aceptar oferta de conductor
+  acceptDriverOffer: async (offerId: string) => {
+    const db = getFirestore();
+    try {
+      await updateDoc(doc(db, 'Driver Offers', offerId), {
+        status: 'accepted',
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Refrescar ofertas
+      get().fetchReceivedOffers();
+    } catch (error) {
+      console.error("Error al aceptar oferta:", error);
+      throw error;
+    }
+  },
+
+  // ✅ NUEVA: Rechazar oferta de conductor
+  rejectDriverOffer: async (offerId: string) => {
+    const db = getFirestore();
+    try {
+      await updateDoc(doc(db, 'Driver Offers', offerId), {
+        status: 'rejected',
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Refrescar ofertas
+      get().fetchReceivedOffers();
+    } catch (error) {
+      console.error("Error al rechazar oferta:", error);
+      throw error;
+    }
+  },
+
+  // ✅ NUEVA: Obtener mis ofertas como conductor
+  fetchMyDriverOffers: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const db = getFirestore();
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error('No estás autenticado');
+
+      const q = query(collection(db, 'Driver Offers'), where('driverId', '==', user.uid));
+      const snapshot = await getDocs(q);
+
+      const offers: DriverOffer[] = [];
+
+      for (const offerDoc of snapshot.docs) {
+        const offerData = offerDoc.data();
+        
+        // Obtener la solicitud asociada
+        const requestRef = doc(db, 'Passenger Requests', offerData.requestId);
+        const requestSnap = await getDoc(requestRef);
+        let request = null;
+        
+        if (requestSnap.exists()) {
+          const requestData = requestSnap.data();
+          let departureDate: Date;
+          
+          if (requestData.departureDate?.toDate) {
+            departureDate = requestData.departureDate.toDate();
+          } else if (typeof requestData.departureDate === 'string') {
+            departureDate = createLocalDate(requestData.departureDate);
+          } else {
+            continue;
+          }
+
+          request = {
+            id: requestSnap.id,
+            ...requestData,
+            departureDate,
+            createdAt: requestData.createdAt?.toDate?.() || new Date(),
+          } as PassengerRequest;
+        }
+
+        offers.push({
+          id: offerDoc.id,
+          ...offerData,
+          request,
+          createdAt: offerData.createdAt?.toDate?.() || new Date(),
+        } as DriverOffer);
+      }
+
+      set({ myDriverOffers: offers, isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error al obtener mis ofertas',
         isLoading: false,
       });
     }

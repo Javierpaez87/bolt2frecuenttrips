@@ -2,7 +2,7 @@ import { toast } from 'react-toastify';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { MapPin, Calendar, Clock, Users, DollarSign, Car, FileText } from 'lucide-react';
+import { MapPin, Calendar, Clock, Users, DollarSign, Car, FileText, UserCheck, User as UserIcon } from 'lucide-react';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -15,14 +15,23 @@ import { useAuthStore } from '../store/authStore';
 import { generateRecurringDates } from '../utils/recurringTrips';
 
 interface CreateTripFormData {
+  // ✅ NUEVO: Tipo de publicación
+  tripType: 'driver_offer' | 'passenger_request';
+  
   origin: string;
   destination: string;
   departureDate: string;
   departureTime: string;
-  availableSeats: number;
-  price: number;
+  
+  // Campos solo para conductores
+  availableSeats?: number;
+  price?: number;
   carModel?: string;
   carColor?: string;
+  
+  // Campos solo para pasajeros
+  maxPrice?: number;
+  
   description?: string;
   phone: string;
 
@@ -37,11 +46,18 @@ interface CreateTripFormData {
 const CreateTrip: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
-  const { createTrip, isLoading, error } = useTripStore();
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateTripFormData>();
+  const { createTrip, createPassengerRequest, isLoading, error } = useTripStore();
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<CreateTripFormData>({
+    defaultValues: {
+      tripType: 'driver_offer' // Por defecto conductor
+    }
+  });
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceDays, setRecurrenceDays] = useState<string[]>([]);
   const [userPhone, setUserPhone] = useState('');
+
+  // ✅ NUEVO: Observar el tipo seleccionado
+  const selectedTripType = watch('tripType');
 
   // Redirigir si no está autenticado
   useEffect(() => {
@@ -101,6 +117,7 @@ const CreateTrip: React.FC = () => {
       const isRecurrent = isRecurring && recurrenceDays.length > 0;
 
       console.log('🔧 onSubmit - datos del formulario:', {
+        tripType: data.tripType,
         isRecurrent,
         isRecurring,
         recurrenceDays,
@@ -160,7 +177,7 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 CORREGIDO: Usar la función mejorada de generación de fechas
+        // Generar fechas recurrentes
         const recurringDates = generateRecurringDates(
           data.recurrenceStartDate,
           data.recurrenceEndDate,
@@ -173,40 +190,74 @@ const CreateTrip: React.FC = () => {
           return;
         }
 
-        // 🔧 CORREGIDO: Agregar las fechas generadas a los datos
+        // Agregar las fechas generadas a los datos
         data.recurringDates = recurringDates;
         
         console.log('🔧 Fechas específicas a crear ahora:', recurringDates);
+      }
+
+      // ✅ VALIDACIONES ESPECÍFICAS POR TIPO
+      if (data.tripType === 'driver_offer') {
+        // Validaciones para conductores
+        if (!data.availableSeats || data.availableSeats < 1) {
+          alert("Debes especificar al menos 1 asiento disponible.");
+          return;
+        }
+        if (!data.price || data.price < 0) {
+          alert("Debes especificar un precio válido.");
+          return;
+        }
+      } else if (data.tripType === 'passenger_request') {
+        // Validaciones para pasajeros
+        if (data.maxPrice && data.maxPrice < 0) {
+          alert("El precio máximo no puede ser negativo.");
+          return;
+        }
       }
 
       await guardarTelefonoUsuario(data.phone);
 
       console.log('🔧 Datos finales enviados al store:', data);
 
-      await createTrip(data as any);
+      // ✅ NUEVO: Llamar función diferente según el tipo
+      if (data.tripType === 'passenger_request') {
+        await createPassengerRequest(data as any);
+        
+        if (isRecurrent) {
+          const hora = data.departureTime;
+          const dias = recurrenceDays
+            .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
+            .join(', ');
 
-      if (isRecurrent) {
-        const hora = data.departureTime;
-        const dias = recurrenceDays
-          .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
-          .join(', ');
-        const fechaInicio = new Date(data.recurrenceStartDate!).toLocaleDateString();
-        const fechaFin = data.recurrenceEndDate 
-          ? new Date(data.recurrenceEndDate).toLocaleDateString()
-          : 'indefinida';
-
-        toast.success(
-          `✅ Has configurado un viaje recurrente para los ${dias} a las ${hora}. Los viajes se publicarán automáticamente ${data.publishDaysBefore} días antes de cada fecha.`,
-          { position: 'top-center', autoClose: 5000 }
-        );
+          toast.success(
+            `✅ Has configurado una solicitud de viaje recurrente para los ${dias} a las ${hora}. Los conductores podrán hacer ofertas para estos viajes.`,
+            { position: 'top-center', autoClose: 5000 }
+          );
+        } else {
+          toast.success('✅ Solicitud de viaje publicada con éxito! Los conductores podrán hacer ofertas.');
+        }
       } else {
-        toast.success('✅ Viaje publicado con éxito!');
+        await createTrip(data as any);
+        
+        if (isRecurrent) {
+          const hora = data.departureTime;
+          const dias = recurrenceDays
+            .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
+            .join(', ');
+
+          toast.success(
+            `✅ Has configurado un viaje recurrente para los ${dias} a las ${hora}. Los viajes se publicarán automáticamente ${data.publishDaysBefore} días antes de cada fecha.`,
+            { position: 'top-center', autoClose: 5000 }
+          );
+        } else {
+          toast.success('✅ Viaje publicado con éxito!');
+        }
       }
 
       navigate('/dashboard');
     } catch (error) {
-      console.error('❌ Error al crear viaje:', error);
-      toast.error('Ocurrió un error al publicar el viaje.');
+      console.error('❌ Error al crear viaje/solicitud:', error);
+      toast.error('Ocurrió un error al publicar.');
     }
   };
 
@@ -227,6 +278,78 @@ const CreateTrip: React.FC = () => {
 
             <form onSubmit={handleSubmit(onSubmit)}>
               <div className="space-y-6">
+                {/* ✅ NUEVO: Selector de tipo de publicación */}
+                <div className="border-b border-gray-200 pb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    ¿Qué tipo de publicación querés hacer?
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${
+                      selectedTripType === 'driver_offer' 
+                        ? 'border-primary-500 bg-primary-50' 
+                        : 'border-gray-300 bg-white hover:bg-gray-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        value="driver_offer"
+                        {...register('tripType', { required: true })}
+                        className="sr-only"
+                      />
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <UserCheck className={`h-6 w-6 ${
+                            selectedTripType === 'driver_offer' ? 'text-primary-600' : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="ml-3">
+                          <div className={`text-sm font-medium ${
+                            selectedTripType === 'driver_offer' ? 'text-primary-900' : 'text-gray-900'
+                          }`}>
+                            Soy Conductor/a
+                          </div>
+                          <div className={`text-sm ${
+                            selectedTripType === 'driver_offer' ? 'text-primary-700' : 'text-gray-500'
+                          }`}>
+                            Ofrezco un viaje en mi vehículo
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${
+                      selectedTripType === 'passenger_request' 
+                        ? 'border-secondary-500 bg-secondary-50' 
+                        : 'border-gray-300 bg-white hover:bg-gray-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        value="passenger_request"
+                        {...register('tripType', { required: true })}
+                        className="sr-only"
+                      />
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <UserIcon className={`h-6 w-6 ${
+                            selectedTripType === 'passenger_request' ? 'text-secondary-600' : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="ml-3">
+                          <div className={`text-sm font-medium ${
+                            selectedTripType === 'passenger_request' ? 'text-secondary-900' : 'text-gray-900'
+                          }`}>
+                            Soy Pasajero/a
+                          </div>
+                          <div className={`text-sm ${
+                            selectedTripType === 'passenger_request' ? 'text-secondary-700' : 'text-gray-500'
+                          }`}>
+                            Busco que me lleven en un viaje
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Origen"
@@ -274,7 +397,9 @@ const CreateTrip: React.FC = () => {
                       onChange={(e) => setIsRecurring(e.target.checked)}
                       className="h-4 w-4 text-primary-600 border-gray-300 rounded"
                     />
-                    <span className="text-sm text-gray-700 font-medium">¿Es un viaje recurrente?</span>
+                    <span className="text-sm text-gray-700 font-medium">
+                      {selectedTripType === 'driver_offer' ? '¿Es un viaje recurrente?' : '¿Es una solicitud recurrente?'}
+                    </span>
                   </label>
 
                   {isRecurring && (
@@ -320,7 +445,10 @@ const CreateTrip: React.FC = () => {
                       </div>
 
                       <Input
-                        label="¿Cuántos días antes se publican los viajes?"
+                        label={selectedTripType === 'driver_offer' 
+                          ? "¿Cuántos días antes se publican los viajes?" 
+                          : "¿Cuántos días antes se publican las solicitudes?"
+                        }
                         type="number"
                         min="0"
                         max="30"
@@ -337,7 +465,10 @@ const CreateTrip: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20.5C6.76 20.5 2.5 16.24 2.5 11S6.76 1.5 12 1.5 21.5 5.76 21.5 11 17.24 20.5 12 20.5z" />
                         </svg>
                         <div>
-                          <strong>Sistema simplificado:</strong> Los viajes recurrentes se publican automáticamente como viajes individuales normales. Los pasajeros verán cada viaje por separado, sin diferencia visual. Solo se publican los viajes según los "días antes" configurados.
+                          <strong>Sistema simplificado:</strong> {selectedTripType === 'driver_offer' 
+                            ? 'Los viajes recurrentes se publican automáticamente como viajes individuales normales.'
+                            : 'Las solicitudes recurrentes se publican automáticamente según los "días antes" configurados.'
+                          }
                         </div>
                       </div>
                     </div>
@@ -386,53 +517,83 @@ const CreateTrip: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="Asientos disponibles"
-                    type="number"
-                    min="1"
-                    max="10"
-                    leftIcon={<Users className="h-5 w-5 text-gray-400" />}
-                    error={errors.availableSeats?.message}
-                    {...register('availableSeats', { 
-                      required: 'El número de asientos es requerido',
-                      min: { value: 1, message: 'Debe haber al menos 1 asiento disponible' },
-                      max: { value: 10, message: 'Máximo 10 asientos disponibles' }
-                    })}
-                  />
+                {/* ✅ CAMPOS CONDICIONALES SEGÚN EL TIPO */}
+                {selectedTripType === 'driver_offer' && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Asientos disponibles"
+                        type="number"
+                        min="1"
+                        max="10"
+                        leftIcon={<Users className="h-5 w-5 text-gray-400" />}
+                        error={errors.availableSeats?.message}
+                        {...register('availableSeats', { 
+                          required: 'El número de asientos es requerido',
+                          min: { value: 1, message: 'Debe haber al menos 1 asiento disponible' },
+                          max: { value: 10, message: 'Máximo 10 asientos disponibles' }
+                        })}
+                      />
 
-                  <Input
-                    label="Precio por asiento"
-                    type="number"
-                    min="0"
-                    step="100"
-                    leftIcon={<DollarSign className="h-5 w-5 text-gray-400" />}
-                    error={errors.price?.message}
-                    {...register('price', { 
-                      required: 'El precio es requerido',
-                      min: { value: 0, message: 'El precio no puede ser negativo' }
-                    })}
-                  />
-                </div>
+                      <Input
+                        label="Precio por asiento"
+                        type="number"
+                        min="0"
+                        step="100"
+                        leftIcon={<DollarSign className="h-5 w-5 text-gray-400" />}
+                        error={errors.price?.message}
+                        {...register('price', { 
+                          required: 'El precio es requerido',
+                          min: { value: 0, message: 'El precio no puede ser negativo' }
+                        })}
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="Modelo del vehículo"
-                    placeholder="Ej: Toyota Corolla 2020"
-                    leftIcon={<Car className="h-5 w-5 text-gray-400" />}
-                    {...register('carModel')}
-                  />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Modelo del vehículo"
+                        placeholder="Ej: Toyota Corolla 2020"
+                        leftIcon={<Car className="h-5 w-5 text-gray-400" />}
+                        {...register('carModel')}
+                      />
 
-                  <Input
-                    label="Color del vehículo"
-                    placeholder="Ej: Blanco"
-                    {...register('carColor')}
-                  />
-                </div>
+                      <Input
+                        label="Color del vehículo"
+                        placeholder="Ej: Blanco"
+                        {...register('carColor')}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {selectedTripType === 'passenger_request' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      label="Precio máximo por asiento (opcional)"
+                      type="number"
+                      min="0"
+                      step="100"
+                      placeholder="Precio máximo que estás dispuesto/a a pagar"
+                      leftIcon={<DollarSign className="h-5 w-5 text-gray-400" />}
+                      error={errors.maxPrice?.message}
+                      {...register('maxPrice', { 
+                        min: { value: 0, message: 'El precio no puede ser negativo' }
+                      })}
+                    />
+                    <div className="flex items-end">
+                      <div className="text-sm text-gray-600 p-3 bg-blue-50 rounded-lg">
+                        💡 Si no especificas un precio máximo, los conductores podrán hacer ofertas con cualquier precio.
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción (opcional)
+                    {selectedTripType === 'driver_offer' 
+                      ? 'Descripción (opcional)' 
+                      : 'Comentarios adicionales (opcional)'
+                    }
                   </label>
                   <div className="relative">
                     <div className="absolute left-3 top-3">
@@ -441,7 +602,10 @@ const CreateTrip: React.FC = () => {
                     <textarea
                       className="block w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                       rows={3}
-                      placeholder="Información adicional sobre el viaje..."
+                      placeholder={selectedTripType === 'driver_offer' 
+                        ? "Información adicional sobre el viaje..."
+                        : "Información adicional sobre tu solicitud..."
+                      }
                       {...register('description')}
                     ></textarea>
                   </div>
@@ -453,7 +617,7 @@ const CreateTrip: React.FC = () => {
                   </Button>
 
                   <Button type="submit" variant="primary" isLoading={isLoading}>
-                    Publicar Viaje
+                    {selectedTripType === 'driver_offer' ? 'Publicar Viaje' : 'Publicar Solicitud'}
                   </Button>
                 </div>
               </div>
