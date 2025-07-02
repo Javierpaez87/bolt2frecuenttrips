@@ -36,7 +36,7 @@ interface TripState {
   isLoading: boolean;
   error: string | null;
   
-  // ✅ FUNCIONES EXISTENTES MANTENIDAS
+  // ✅ FUNCIONES EXISTENTES MANTENIDAS COMPLETAS
   createTrip: (tripData: any) => Promise<Trip>;
   fetchTrips: () => Promise<void>;
   fetchMyTrips: () => Promise<void>;
@@ -128,6 +128,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   isLoading: false,
   error: null,
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   createTrip: async (tripData) => {
     set({ isLoading: true, error: null });
     try {
@@ -255,6 +256,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   createPassengerRequest: async (requestData) => {
     set({ isLoading: true, error: null });
     try {
@@ -380,6 +382,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA CON CORRECCIÓN
   fetchTrips: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -408,7 +411,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       allTrips.forEach(trip => {
         if (trip.isRecurring && trip.recurrenceId) {
           const existingTrip = recurringGroups.get(trip.recurrenceId);
-          // 🔧 CORREGIDO: Cambiar < por > para obtener el viaje MÁS PRÓXIMO (fecha más temprana)
+          // 🔧 CORREGIDO: Obtener el viaje MÁS PRÓXIMO (fecha más temprana)
           if (!existingTrip || trip.departureDate.getTime() < existingTrip.departureDate.getTime()) {
             recurringGroups.set(trip.recurrenceId, trip);
             
@@ -428,16 +431,6 @@ export const useTripStore = create<TripState>((set, get) => ({
       console.log('🔍 Viajes totales en Firebase:', allTrips.length);
       console.log('🔍 Viajes finales mostrados:', finalTrips.length);
       console.log('🔍 Viajes recurrentes únicos mostrados:', recurringGroups.size);
-
-      // 🔧 AGREGADO: Log detallado de grupos recurrentes para debug
-      recurringGroups.forEach((trip, recurrenceId) => {
-        console.log('🔧 Grupo recurrente final:', {
-          recurrenceId,
-          fecha: trip.departureDate.toISOString().split('T')[0],
-          origen: trip.origin,
-          destino: trip.destination
-        });
-      });
 
       const recurringGroupsForDashboard = new Map<string, RecurringTripGroup>();
       
@@ -487,6 +480,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   fetchPassengerRequests: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -515,7 +509,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       allRequests.forEach(request => {
         if (request.isRecurring && request.recurrenceId) {
           const existingRequest = recurringGroups.get(request.recurrenceId);
-          // 🔧 CORREGIDO: Cambiar < por > para obtener la solicitud MÁS PRÓXIMA
+          // 🔧 CORREGIDO: Obtener la solicitud MÁS PRÓXIMA
           if (!existingRequest || request.departureDate.getTime() < existingRequest.departureDate.getTime()) {
             recurringGroups.set(request.recurrenceId, request);
           }
@@ -543,6 +537,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   fetchMyTrips: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -608,6 +603,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   fetchMyPassengerRequests: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -638,6 +634,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   fetchMyBookings: async () => {
     set({ isLoading: true, error: null });
 
@@ -693,6 +690,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     });
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   fetchBookingsForMyTrips: async () => {
     set({ isLoading: true, error: null });
 
@@ -753,6 +751,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   filterTrips: (filters: TripFilters) => {
     const allTrips = get().trips;
     const filtered = allTrips.filter((trip) => {
@@ -767,6 +766,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({ filteredTrips: filtered });
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   filterPassengerRequests: (filters: TripFilters) => {
     const allRequests = get().passengerRequests;
     const filtered = allRequests.filter((request) => {
@@ -781,6 +781,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({ filteredPassengerRequests: filtered });
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   bookTrip: async (tripId: string, seats: number) => {
     set({ isLoading: true, error: null });
     try {
@@ -814,6 +815,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA CON VALIDACIÓN MEJORADA
   createDriverOffer: async (requestId: string, offerData: any) => {
     set({ isLoading: true, error: null });
     try {
@@ -822,7 +824,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       const user = auth.currentUser;
       if (!user) throw new Error('No estás autenticado');
 
-      // ✅ MEJORADO: Obtener teléfono del perfil con manejo de errores más robusto
+      // ✅ MEJORADO: Obtener teléfono del perfil con validación
       console.log('📞 Obteniendo teléfono del conductor para la oferta...');
       
       let driverPhone = '';
@@ -834,7 +836,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           driverPhone = userData.phone || '';
           console.log('📞 Teléfono del conductor obtenido:', driverPhone ? 'SÍ' : 'NO');
           
-          // ✅ NUEVO: Validar que el teléfono tenga formato correcto antes de continuar
+          // Validar formato antes de continuar
           if (driverPhone && !/^549\d{10}$/.test(driverPhone.trim())) {
             console.warn('📞 Teléfono del conductor no tiene formato válido:', driverPhone);
             throw new Error('Tu número de teléfono no tiene el formato correcto. Debe comenzar con 549 y tener 13 dígitos.');
@@ -845,7 +847,7 @@ export const useTripStore = create<TripState>((set, get) => ({
         }
       } catch (phoneError) {
         console.error('❌ Error obteniendo teléfono del conductor:', phoneError);
-        throw phoneError; // Re-lanzar el error para que se maneje en el UI
+        throw phoneError;
       }
 
       const fullOffer = {
@@ -858,7 +860,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           id: user.uid,
           name: user.displayName || '',
           email: user.email || '',
-          phone: driverPhone, // ✅ CORREGIDO: Usar teléfono validado del perfil
+          phone: driverPhone,
           profilePicture: user.photoURL || '',
         },
       };
@@ -893,6 +895,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   fetchMyDriverOffers: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -919,7 +922,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           }
         }
 
-        // ✅ MEJORADO: Asegurar que el teléfono del conductor esté presente con validación
+        // Asegurar que el teléfono del conductor esté presente
         let driverInfo = data.driver || {};
         if (!driverInfo.phone) {
           try {
@@ -955,6 +958,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   fetchReceivedDriverOffers: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -990,7 +994,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           }
         }
 
-        // ✅ MEJORADO: Asegurar que el teléfono del conductor esté presente con validación
+        // Asegurar que el teléfono del conductor esté presente
         let driverInfo = data.driver || {};
         if (!driverInfo.phone && data.driverId) {
           try {
@@ -1026,6 +1030,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   deleteTrip: async (tripId: string) => {
     const db = getFirestore();
     try {
@@ -1041,6 +1046,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
   deletePassengerRequest: async (requestId: string) => {
     const db = getFirestore();
     try {
@@ -1056,6 +1062,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   deleteRecurringGroup: async (recurrenceId: string) => {
     const db = getFirestore();
     try {
@@ -1078,11 +1085,13 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   clearFilteredTrips: () => {
     const allTrips = get().trips;
     set({ filteredTrips: allTrips });
   },
 
+  // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   cancelBooking: async (bookingId: string) => {
     const db = getFirestore();
     try {
