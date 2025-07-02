@@ -399,14 +399,24 @@ export const useTripStore = create<TripState>((set, get) => ({
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
+      // 🔧 CORREGIDO: Ordenar por fecha antes de filtrar para asegurar orden correcto
+      allTrips.sort((a, b) => a.departureDate.getTime() - b.departureDate.getTime());
+
       const recurringGroups = new Map<string, Trip>();
       const individualTrips: Trip[] = [];
 
       allTrips.forEach(trip => {
         if (trip.isRecurring && trip.recurrenceId) {
           const existingTrip = recurringGroups.get(trip.recurrenceId);
-          if (!existingTrip || trip.departureDate < existingTrip.departureDate) {
+          // 🔧 CORREGIDO: Cambiar < por > para obtener el viaje MÁS PRÓXIMO (fecha más temprana)
+          if (!existingTrip || trip.departureDate.getTime() < existingTrip.departureDate.getTime()) {
             recurringGroups.set(trip.recurrenceId, trip);
+            
+            console.log('🔧 Actualizando viaje más próximo para grupo:', trip.recurrenceId, {
+              fechaAnterior: existingTrip?.departureDate.toISOString().split('T')[0],
+              fechaNueva: trip.departureDate.toISOString().split('T')[0],
+              esNuevoMasProximo: !existingTrip || trip.departureDate.getTime() < existingTrip.departureDate.getTime()
+            });
           }
         } else {
           individualTrips.push(trip);
@@ -418,6 +428,16 @@ export const useTripStore = create<TripState>((set, get) => ({
       console.log('🔍 Viajes totales en Firebase:', allTrips.length);
       console.log('🔍 Viajes finales mostrados:', finalTrips.length);
       console.log('🔍 Viajes recurrentes únicos mostrados:', recurringGroups.size);
+
+      // 🔧 AGREGADO: Log detallado de grupos recurrentes para debug
+      recurringGroups.forEach((trip, recurrenceId) => {
+        console.log('🔧 Grupo recurrente final:', {
+          recurrenceId,
+          fecha: trip.departureDate.toISOString().split('T')[0],
+          origen: trip.origin,
+          destino: trip.destination
+        });
+      });
 
       const recurringGroupsForDashboard = new Map<string, RecurringTripGroup>();
       
@@ -486,13 +506,17 @@ export const useTripStore = create<TripState>((set, get) => ({
           return request.departureDate >= today && request.status === 'active';
         });
 
+      // 🔧 CORREGIDO: Ordenar por fecha antes de filtrar
+      allRequests.sort((a, b) => a.departureDate.getTime() - b.departureDate.getTime());
+
       const recurringGroups = new Map<string, PassengerRequest>();
       const individualRequests: PassengerRequest[] = [];
 
       allRequests.forEach(request => {
         if (request.isRecurring && request.recurrenceId) {
           const existingRequest = recurringGroups.get(request.recurrenceId);
-          if (!existingRequest || request.departureDate < existingRequest.departureDate) {
+          // 🔧 CORREGIDO: Cambiar < por > para obtener la solicitud MÁS PRÓXIMA
+          if (!existingRequest || request.departureDate.getTime() < existingRequest.departureDate.getTime()) {
             recurringGroups.set(request.recurrenceId, request);
           }
         } else {

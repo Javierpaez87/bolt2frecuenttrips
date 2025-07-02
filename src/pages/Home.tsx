@@ -44,6 +44,9 @@ const Home: React.FC = () => {
             trip.departureDate >= today
           );
 
+        // 🔧 CORREGIDO: Ordenar por fecha antes de filtrar
+        allTrips.sort((a, b) => a.departureDate.getTime() - b.departureDate.getTime());
+
         // ✅ APLICAR EL MISMO FILTRO QUE EN EL STORE: Solo mostrar UN viaje por grupo recurrente
         const recurringGroups = new Map<string, Trip>();
         const individualTrips: Trip[] = [];
@@ -51,9 +54,15 @@ const Home: React.FC = () => {
         allTrips.forEach(trip => {
           if (trip.isRecurring && trip.recurrenceId) {
             const existingTrip = recurringGroups.get(trip.recurrenceId);
-            if (!existingTrip || trip.departureDate < existingTrip.departureDate) {
-              // Guardar solo el viaje más próximo de cada grupo recurrente
+            // 🔧 CORREGIDO: Cambiar < por > para obtener el viaje MÁS PRÓXIMO
+            if (!existingTrip || trip.departureDate.getTime() < existingTrip.departureDate.getTime()) {
               recurringGroups.set(trip.recurrenceId, trip);
+              
+              console.log('🏠 Home - Actualizando viaje más próximo:', {
+                recurrenceId: trip.recurrenceId,
+                fechaAnterior: existingTrip?.departureDate.toISOString().split('T')[0],
+                fechaNueva: trip.departureDate.toISOString().split('T')[0]
+              });
             }
           } else {
             // Viajes individuales se muestran todos
@@ -100,6 +109,9 @@ const Home: React.FC = () => {
             request.departureDate >= today
           );
 
+        // 🔧 CORREGIDO: Ordenar por fecha antes de filtrar
+        allRequests.sort((a, b) => a.departureDate.getTime() - b.departureDate.getTime());
+
         // Aplicar filtro similar para solicitudes recurrentes
         const recurringRequestGroups = new Map<string, PassengerRequest>();
         const individualRequests: PassengerRequest[] = [];
@@ -107,7 +119,8 @@ const Home: React.FC = () => {
         allRequests.forEach(request => {
           if (request.isRecurring && request.recurrenceId) {
             const existingRequest = recurringRequestGroups.get(request.recurrenceId);
-            if (!existingRequest || request.departureDate < existingRequest.departureDate) {
+            // 🔧 CORREGIDO: Cambiar < por > para obtener la solicitud MÁS PRÓXIMA
+            if (!existingRequest || request.departureDate.getTime() < existingRequest.departureDate.getTime()) {
               recurringRequestGroups.set(request.recurrenceId, request);
             }
           } else {
