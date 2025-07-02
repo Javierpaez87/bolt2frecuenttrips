@@ -53,6 +53,24 @@ const convertDateToTimestamp = (dateInput: string | Date): Timestamp => {
   }
 };
 
+// 🔧 NUEVA FUNCIÓN: Filtrar solo viajes que deben ser visibles ahora
+const shouldTripBeVisible = (trip: Trip, publishDaysBefore: number = 3): boolean => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const tripDate = new Date(trip.departureDate);
+  tripDate.setHours(0, 0, 0, 0);
+  
+  // Calcular la fecha de publicación
+  const publishDate = new Date(tripDate);
+  publishDate.setDate(publishDate.getDate() - publishDaysBefore);
+  
+  // El viaje debe ser visible si:
+  // 1. La fecha de publicación ya llegó (hoy >= publishDate)
+  // 2. El viaje es futuro (tripDate >= today)
+  return today >= publishDate && tripDate >= today;
+};
+
 export const useTripStore = create<TripState>((set, get) => ({
   trips: [],
   myTrips: [],
@@ -201,7 +219,7 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       const allDocsSnapshot = await getDocs(collection(db, 'Post Trips'));
 
-      const trips: Trip[] = allDocsSnapshot.docs
+      const allTrips: Trip[] = allDocsSnapshot.docs
         .map((doc) => {
           const data = doc.data() as DocumentData;
           return processFirestoreTrip(doc, data);
@@ -213,22 +231,55 @@ export const useTripStore = create<TripState>((set, get) => ({
           return trip.departureDate >= today && trip.availableSeats > 0;
         });
 
-      console.log('🔍 Viajes cargados desde Firebase:', trips.length);
-      console.log('🔍 Viajes recurrentes encontrados:', trips.filter(t => t.isRecurring).length);
+      // 🔧 NUEVO: Filtrar viajes recurrentes por visibilidad
+      const visibleTrips = allTrips.filter(trip => {
+        if (!trip.isRecurring) {
+          // Viajes individuales siempre visibles si son futuros
+          return true;
+        } else {
+          // Viajes recurrentes: solo mostrar si deben ser visibles según publishDaysBefore
+          const publishDaysBefore = trip.publishDaysBefore || 3;
+          return shouldTripBeVisible(trip, publishDaysBefore);
+        }
+      });
 
-      // Procesar grupos recurrentes
-      const recurringGroups = new Map<string, RecurringTripGroup>();
+      // 🔧 NUEVO: Para viajes recurrentes, mostrar solo el próximo viaje de cada grupo
+      const recurringGroups = new Map<string, Trip>();
+      const individualTrips: Trip[] = [];
+
+      visibleTrips.forEach(trip => {
+        if (trip.isRecurring && trip.recurrenceId) {
+          const existingTrip = recurringGroups.get(trip.recurrenceId);
+          if (!existingTrip || trip.departureDate < existingTrip.departureDate) {
+            // Guardar solo el viaje más próximo de cada grupo recurrente
+            recurringGroups.set(trip.recurrenceId, trip);
+          }
+        } else {
+          // Viajes individuales se muestran todos
+          individualTrips.push(trip);
+        }
+      });
+
+      // Combinar viajes individuales con próximos viajes recurrentes
+      const finalTrips = [...individualTrips, ...Array.from(recurringGroups.values())];
+
+      console.log('🔍 Viajes totales en Firebase:', allTrips.length);
+      console.log('🔍 Viajes visibles después de filtros:', finalTrips.length);
+      console.log('🔍 Viajes recurrentes únicos mostrados:', recurringGroups.size);
+
+      // Procesar grupos recurrentes para el dashboard
+      const recurringGroupsForDashboard = new Map<string, RecurringTripGroup>();
       
-      trips
+      allTrips
         .filter(trip => trip.isRecurring && trip.recurrenceId)
         .forEach(trip => {
-          if (!recurringGroups.has(trip.recurrenceId!)) {
+          if (!recurringGroupsForDashboard.has(trip.recurrenceId!)) {
             const nextTripDate = getNextTripDate(
               trip.recurrenceDays || [],
               trip.recurrenceStartDate || ''
             );
 
-            recurringGroups.set(trip.recurrenceId!, {
+            recurringGroupsForDashboard.set(trip.recurrenceId!, {
               id: trip.recurrenceId!,
               driverId: trip.driverId,
               driver: trip.driver,
@@ -251,12 +302,10 @@ export const useTripStore = create<TripState>((set, get) => ({
           }
         });
 
-      console.log('🔍 Grupos recurrentes procesados:', recurringGroups.size);
-
       set({ 
-        trips, 
-        filteredTrips: trips, 
-        recurringGroups: Array.from(recurringGroups.values()),
+        trips: finalTrips, 
+        filteredTrips: finalTrips, 
+        recurringGroups: Array.from(recurringGroupsForDashboard.values()),
         isLoading: false 
       });
     } catch (error) {

@@ -47,7 +47,7 @@ const Search: React.FC = () => {
     filterTrips(filters);
   };
 
-  // ✅ MEJORADO: Verificar teléfono con más logging y validación robusta
+  // ✅ MEJORADO: Verificar teléfono con validación más robusta y múltiples intentos
   const checkUserPhone = async (): Promise<boolean> => {
     const auth = getAuth();
     const uid = auth.currentUser?.uid;
@@ -59,12 +59,26 @@ const Search: React.FC = () => {
     try {
       const db = getFirestore();
       const userRef = doc(db, 'users', uid);
-      const snapshot = await getDoc(userRef);
       
-      console.log('📞 Verificando teléfono para usuario:', uid);
+      // ✅ NUEVO: Intentar múltiples veces para asegurar que obtenemos los datos más recientes
+      let attempts = 0;
+      let userData = null;
       
-      if (snapshot.exists()) {
-        const userData = snapshot.data();
+      while (attempts < 3 && !userData) {
+        const snapshot = await getDoc(userRef);
+        if (snapshot.exists()) {
+          userData = snapshot.data();
+          break;
+        }
+        attempts++;
+        if (attempts < 3) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Esperar 500ms entre intentos
+        }
+      }
+      
+      console.log('📞 Verificando teléfono para usuario:', uid, 'intento:', attempts);
+      
+      if (userData) {
         const phone = userData.phone;
         
         console.log('📞 Datos del usuario encontrados:', { 
@@ -87,7 +101,7 @@ const Search: React.FC = () => {
           return false;
         }
       } else {
-        console.log('📞 No se encontró documento del usuario en Firestore');
+        console.log('📞 No se encontró documento del usuario en Firestore después de múltiples intentos');
         return false;
       }
     } catch (error) {
@@ -104,7 +118,7 @@ const Search: React.FC = () => {
 
     console.log('🎯 Iniciando proceso de reserva para viaje:', trip.id);
 
-    // ✅ MEJORADO: Verificar teléfono con logging detallado
+    // ✅ MEJORADO: Verificar teléfono con múltiples intentos
     const hasValidPhone = await checkUserPhone();
     
     console.log('📞 Resultado verificación teléfono:', hasValidPhone);
@@ -137,7 +151,7 @@ const Search: React.FC = () => {
     }
   };
 
-  // 🔧 SIMPLIFICADO: Solo mostrar viajes individuales (sin distinción de recurrentes)
+  // 🔧 SIMPLIFICADO: Todos los viajes se muestran igual (sin distinción de recurrentes)
   const tripsToShow = filteredTrips;
 
   return (

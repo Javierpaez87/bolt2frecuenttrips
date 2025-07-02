@@ -141,34 +141,66 @@ const ProfileEdit: React.FC = () => {
         console.log('📧 Email actualizado');
       }
 
-      // ✅ CORREGIDO: Usar setDoc con merge para asegurar que se guarde
+      // ✅ MEJORADO: Usar setDoc con merge para asegurar que se guarde correctamente
       const userRef = doc(db, 'users', uid);
-      await setDoc(userRef, { 
-        name, 
-        phone, 
-        email,
-        updatedAt: new Date()
-      }, { merge: true });
+      
+      // Primero verificar si el documento existe
+      const existingDoc = await getDoc(userRef);
+      
+      if (existingDoc.exists()) {
+        // Si existe, actualizar con updateDoc
+        await updateDoc(userRef, { 
+          name, 
+          phone, 
+          email,
+          updatedAt: new Date()
+        });
+        console.log('💾 Documento actualizado con updateDoc');
+      } else {
+        // Si no existe, crear con setDoc
+        await setDoc(userRef, { 
+          name, 
+          phone, 
+          email,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        console.log('💾 Documento creado con setDoc');
+      }
 
-      console.log('💾 Datos guardados en Firestore');
-
-      // ✅ NUEVO: Verificar que se guardó correctamente
-      const verifyDoc = await getDoc(userRef);
-      if (verifyDoc.exists()) {
-        const savedData = verifyDoc.data();
-        console.log('✅ Verificación - datos guardados:', savedData);
+      // ✅ NUEVO: Verificar que se guardó correctamente con múltiples intentos
+      let verificationAttempts = 0;
+      let savedCorrectly = false;
+      
+      while (verificationAttempts < 3 && !savedCorrectly) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // Esperar 500ms
         
-        // ✅ CORREGIDO: Actualizar el store de auth con los datos verificados
-        useAuthStore.setState((state) => ({
-          user: { 
-            ...state.user!, 
-            name: savedData.name || name, 
-            phone: savedData.phone || phone, 
-            email: savedData.email || email 
-          },
-        }));
+        const verifyDoc = await getDoc(userRef);
+        if (verifyDoc.exists()) {
+          const savedData = verifyDoc.data();
+          console.log(`✅ Verificación intento ${verificationAttempts + 1} - datos guardados:`, savedData);
+          
+          if (savedData.phone === phone && savedData.name === name && savedData.email === email) {
+            savedCorrectly = true;
+            
+            // ✅ CORREGIDO: Actualizar el store de auth con los datos verificados
+            useAuthStore.setState((state) => ({
+              user: { 
+                ...state.user!, 
+                name: savedData.name || name, 
+                phone: savedData.phone || phone, 
+                email: savedData.email || email 
+              },
+            }));
 
-        console.log('🔄 Store actualizado con datos verificados');
+            console.log('🔄 Store actualizado con datos verificados');
+          }
+        }
+        verificationAttempts++;
+      }
+
+      if (!savedCorrectly) {
+        throw new Error('No se pudo verificar que los datos se guardaron correctamente');
       }
 
       alert('Perfil actualizado correctamente.');
