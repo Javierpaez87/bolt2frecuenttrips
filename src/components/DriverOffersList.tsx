@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Clock, DollarSign, Car, Users, Check, X } from 'lucide-react';
+import { Calendar, Clock, DollarSign, Car, Users, Check, X, Phone } from 'lucide-react';
 import { DriverOffer } from '../types';
 import { getFirestore, updateDoc, doc } from 'firebase/firestore';
 
@@ -92,10 +92,12 @@ const DriverOffersList: React.FC<Props> = ({ offers, onOfferUpdate, isPassenger 
                         : `${offer.request?.origin} → ${offer.request?.destination}`
                     }
                   </p>
+                  {/* ✅ CORREGIDO: Mostrar teléfono del conductor en ofertas recibidas */}
                   {isPassenger && offer.driver?.phone && (
-                    <p className="text-sm text-gray-600">
-                      <strong>Teléfono:</strong> {offer.driver.phone}
-                    </p>
+                    <div className="flex items-center text-sm text-gray-600 mt-1">
+                      <Phone className="h-4 w-4 text-blue-500 mr-1" />
+                      <span><strong>Teléfono:</strong> {offer.driver.phone}</span>
+                    </div>
                   )}
                 </div>
 
@@ -182,30 +184,69 @@ const DriverOffersList: React.FC<Props> = ({ offers, onOfferUpdate, isPassenger 
                 </div>
               )}
 
-              {/* Información de contacto para ofertas aceptadas */}
+              {/* ✅ MEJORADO: Información de contacto más prominente para ofertas aceptadas */}
               {offer.status === 'accepted' && offer.driver?.phone && (
                 <div className="mt-4 p-3 bg-green-50 rounded border border-green-200">
                   <p className="text-sm text-green-800 mb-2">
                     <strong>¡Oferta aceptada!</strong> Podés contactar al conductor:
                   </p>
-                  <a
-                    href={`https://wa.me/${offer.driver.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                      `Hola ${offer.driver.name}, acepté tu oferta para el viaje de ${offer.request?.origin} a ${offer.request?.destination}. ¡Coordinemos los detalles!`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-500 rounded hover:bg-green-600 transition"
-                  >
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={`https://wa.me/${offer.driver.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                        `Hola ${offer.driver.name}, acepté tu oferta para el viaje de ${offer.request?.origin} a ${offer.request?.destination}. ¡Coordinemos los detalles!`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-500 rounded hover:bg-green-600 transition"
                     >
-                      <path d="M16.403 12.675c-.245-.123-1.447-.713-1.672-.793-.225-.082-.39-.123-.555.123s-.637.793-.782.957c-.143.164-.287.184-.532.061-.245-.123-1.034-.381-1.97-1.215-.728-.649-1.219-1.451-1.36-1.696-.143-.246-.015-.379.107-.5.11-.109.245-.287.368-.43.123-.143.164-.245.246-.408.082-.163.041-.307-.02-.43-.061-.123-.555-1.336-.759-1.832-.2-.48-.403-.414-.555-.414h-.472c-.163 0-.429.061-.653.307s-.857.838-.857 2.043c0 1.205.877 2.367 1 .51.123 1.553 2.06 3.064 2.352 3.278.291.215 4.059 2.582 4.98 2.932.697.277 1.243.221 1.711.134.522-.097 1.447-.59 1.652-1.162.204-.572.204-1.062.143-1.162-.061-.1-.225-.163-.47-.286z" />
-                      <path d="M12.005 2C6.487 2 2 6.486 2 12c0 1.995.584 3.842 1.59 5.403L2 22l4.74-1.563A9.956 9.956 0 0 0 12.005 22C17.514 22 22 17.514 22 12S17.514 2 12.005 2zm0 17.931a7.936 7.936 0 0 1-4.256-1.243l-.305-.184-2.815.927.923-2.74-.2-.312A7.932 7.932 0 0 1 4.065 12c0-4.384 3.56-7.937 7.94-7.937 4.374 0 7.933 3.553 7.933 7.937 0 4.379-3.553 7.931-7.933 7.931z" />
-                    </svg>
-                    Contactar por WhatsApp
-                  </a>
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M16.403 12.675c-.245-.123-1.447-.713-1.672-.793-.225-.082-.39-.123-.555.123s-.637.793-.782.957c-.143.164-.287.184-.532.061-.245-.123-1.034-.381-1.97-1.215-.728-.649-1.219-1.451-1.36-1.696-.143-.246-.015-.379.107-.5.11-.109.245-.287.368-.43.123-.143.164-.245.246-.408.082-.163.041-.307-.02-.43-.061-.123-.555-1.336-.759-1.832-.2-.48-.403-.414-.555-.414h-.472c-.163 0-.429.061-.653.307s-.857.838-.857 2.043c0 1.205.877 2.367 1 .51.123 1.553 2.06 3.064 2.352 3.278.291.215 4.059 2.582 4.98 2.932.697.277 1.243.221 1.711.134.522-.097 1.447-.59 1.652-1.162.204-.572.204-1.062.143-1.162-.061-.1-.225-.163-.47-.286z" />
+                        <path d="M12.005 2C6.487 2 2 6.486 2 12c0 1.995.584 3.842 1.59 5.403L2 22l4.74-1.563A9.956 9.956 0 0 0 12.005 22C17.514 22 22 17.514 22 12S17.514 2 12.005 2zm0 17.931a7.936 7.936 0 0 1-4.256-1.243l-.305-.184-2.815.927.923-2.74-.2-.312A7.932 7.932 0 0 1 4.065 12c0-4.384 3.56-7.937 7.94-7.937 4.374 0 7.933 3.553 7.933 7.937 0 4.379-3.553 7.931-7.933 7.931z" />
+                      </svg>
+                      Contactar por WhatsApp
+                    </a>
+                    <div className="flex items-center text-sm text-green-700 bg-green-100 px-3 py-2 rounded">
+                      <Phone className="h-4 w-4 mr-1" />
+                      <span>{offer.driver.phone}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ NUEVO: Mostrar teléfono también para ofertas pendientes (para que el pasajero pueda contactar antes de decidir) */}
+              {isPassenger && offer.status === 'pending' && offer.driver?.phone && (
+                <div className="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
+                  <p className="text-sm text-blue-800 mb-2">
+                    <strong>Información de contacto del conductor:</strong>
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={`https://wa.me/${offer.driver.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                        `Hola ${offer.driver.name}, vi tu oferta para el viaje de ${offer.request?.origin} a ${offer.request?.destination}. Me interesa conocer más detalles.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-500 rounded hover:bg-blue-600 transition"
+                    >
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M16.403 12.675c-.245-.123-1.447-.713-1.672-.793-.225-.082-.39-.123-.555.123s-.637.793-.782.957c-.143.164-.287.184-.532.061-.245-.123-1.034-.381-1.97-1.215-.728-.649-1.219-1.451-1.36-1.696-.143-.246-.015-.379.107-.5.11-.109.245-.287.368-.43.123-.143.164-.245.246-.408.082-.163.041-.307-.02-.43-.061-.123-.555-1.336-.759-1.832-.2-.48-.403-.414-.555-.414h-.472c-.163 0-.429.061-.653.307s-.857.838-.857 2.043c0 1.205.877 2.367 1 .51.123 1.553 2.06 3.064 2.352 3.278.291.215 4.059 2.582 4.98 2.932.697.277 1.243.221 1.711.134.522-.097 1.447-.59 1.652-1.162.204-.572.204-1.062.143-1.162-.061-.1-.225-.163-.47-.286z" />
+                        <path d="M12.005 2C6.487 2 2 6.486 2 12c0 1.995.584 3.842 1.59 5.403L2 22l4.74-1.563A9.956 9.956 0 0 0 12.005 22C17.514 22 22 17.514 22 12S17.514 2 12.005 2zm0 17.931a7.936 7.936 0 0 1-4.256-1.243l-.305-.184-2.815.927.923-2.74-.2-.312A7.932 7.932 0 0 1 4.065 12c0-4.384 3.56-7.937 7.94-7.937 4.374 0 7.933 3.553 7.933 7.937 0 4.379-3.553 7.931-7.933 7.931z" />
+                      </svg>
+                      Consultar por WhatsApp
+                    </a>
+                    <div className="flex items-center text-sm text-blue-700 bg-blue-100 px-3 py-2 rounded">
+                      <Phone className="h-4 w-4 mr-1" />
+                      <span>{offer.driver.phone}</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </li>
