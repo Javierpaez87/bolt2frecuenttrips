@@ -402,7 +402,7 @@ className="rounded-xl shadow-2xl max-w-full h-auto animate-fade-in"
                         ) : (
                           <div className="h-full w-full bg-secondary-100 flex items-center justify-center">
                             <span className="text-secondary-600 font-medium">
-                              {request.passenger?.name?.substring(0, 2).toUpperCase() || 'PA'}
+                              PA
                             </span>
                           </div>
                         )}
@@ -415,7 +415,7 @@ className="rounded-xl shadow-2xl max-w-full h-auto animate-fade-in"
                       </h3>
                       
                       <p className="text-sm text-gray-500 mt-1">
-                        Solicita: {request.passenger?.name || 'Pasajero'}
+                        Solicitud de pasajero
                       </p>
 
                       <div className="grid grid-cols-2 gap-2 mt-3">
