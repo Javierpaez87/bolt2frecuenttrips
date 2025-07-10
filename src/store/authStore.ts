@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
-import { getFirestore, setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { getFirestore, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { auth } from '../config/firebase';
 import { User } from '../types';
 
@@ -33,18 +33,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const { user: firebaseUser } = await signInWithEmailAndPassword(auth, email, password);
-
-      const db = getFirestore();
-      const userRef = doc(db, 'users', firebaseUser.uid);
-      const snapshot = await getDoc(userRef);
-      const data = snapshot.exists() ? snapshot.data() : {};
-
+      
       set({
         user: {
           id: firebaseUser.uid,
-          name: data?.name || firebaseUser.displayName || '',
-          email: data?.email || firebaseUser.email || '',
-          phone: data?.phone || '',
+          name: firebaseUser.displayName || '',
+          email: firebaseUser.email || '',
+          phone: firebaseUser.phoneNumber || '',
           createdAt: new Date(firebaseUser.metadata.creationTime || Date.now()),
         },
         isAuthenticated: true,
@@ -52,13 +47,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
     } catch (error: any) {
       let errorMessage = 'Error al iniciar sesión';
-
+      
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         errorMessage = 'Email o contraseña incorrectos';
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'Demasiados intentos fallidos. Por favor, intenta más tarde';
       }
-
+      
       set({
         error: errorMessage,
         isLoading: false,
@@ -69,6 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (name, email, phone, password) => {
     set({ isLoading: true, error: null });
 
+    // ✅ Sanitización de entradas
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password.trim();
     const sanitizedName = name.trim();
@@ -76,6 +72,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     try {
       const db = getFirestore();
+
+      // ✅ Debug: ver datos antes del fallo
+      console.log('Intentando registrar:', {
+        sanitizedEmail,
+        sanitizedPassword,
+        sanitizedName,
+        sanitizedPhone,
+      });
 
       const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
 
@@ -100,7 +104,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
       });
     } catch (error: any) {
-      console.error('Error en Firebase:', error);
+      console.error('Error en Firebase:', error); // ✅ Ver más detalle
 
       let errorMessage = 'Error al registrarse';
       if (error.code === 'auth/email-already-in-use') {
@@ -133,74 +137,54 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   loginWithGoogle: async () => {
-  set({ isLoading: true, error: null });
-  try {
-    const provider = new GoogleAuthProvider();
-    const { user: firebaseUser } = await signInWithPopup(auth, provider);
-    const db = getFirestore();
+    set({ isLoading: true, error: null });
+    try {
+      const provider = new GoogleAuthProvider();
+      const { user: firebaseUser } = await signInWithPopup(auth, provider);
+      const db = getFirestore();
 
-    const userRef = doc(db, 'users', firebaseUser.uid);
-    const snapshot = await getDoc(userRef);
-    const existingData = snapshot.exists() ? snapshot.data() : {};
+      await setDoc(doc(db, 'users', firebaseUser.uid), {
+        name: firebaseUser.displayName || '',
+        email: firebaseUser.email || '',
+        phone: firebaseUser.phoneNumber || '',
+        createdAt: serverTimestamp(),
+      }, { merge: true });
 
-    await setDoc(userRef, {
-      name: firebaseUser.displayName || existingData.name || '',
-      email: firebaseUser.email || existingData.email || '',
-      phone: existingData.phone || '',
-      createdAt: existingData.createdAt || serverTimestamp(),
-    }, { merge: true });
-
-    set({
-      user: {
-        id: firebaseUser.uid,
-        name: firebaseUser.displayName || existingData.name || '',
-        email: firebaseUser.email || existingData.email || '',
-        phone: existingData.phone || '',
-        createdAt: new Date(firebaseUser.metadata.creationTime || Date.now()),
-      },
-      isAuthenticated: true,
-      isLoading: false,
-    });
-  } catch (error: any) {
-    set({
-      error: 'Error al iniciar sesión con Google',
-      isLoading: false,
-    });
-  }
-},
-
+      set({
+        user: {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || '',
+          email: firebaseUser.email || '',
+          phone: firebaseUser.phoneNumber || '',
+          createdAt: new Date(firebaseUser.metadata.creationTime || Date.now()),
+        },
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error: any) {
+      set({
+        error: 'Error al iniciar sesión con Google',
+        isLoading: false,
+      });
+    }
+  },
 }));
 
-// ✅ NUEVO: Escuchar cambios de sesión y cargar datos desde Firestore
-onAuthStateChanged(auth, async (firebaseUser) => {
-  console.log('🔐 onAuthStateChanged triggered:', firebaseUser ? 'Usuario encontrado' : 'No hay usuario');
-  
+// ⏱ Escuchar cambios de sesión
+onAuthStateChanged(auth, (firebaseUser) => {
   if (firebaseUser) {
-    const db = getFirestore();
-    const userRef = doc(db, 'users', firebaseUser.uid);
-    const snapshot = await getDoc(userRef);
-    const data = snapshot.exists() ? snapshot.data() : {};
-
-    console.log('🔐 Datos del usuario cargados desde Firestore:', {
-      uid: firebaseUser.uid,
-      hasData: snapshot.exists(),
-      name: data?.name || firebaseUser.displayName,
-      email: data?.email || firebaseUser.email
-    });
-
     useAuthStore.setState({
       user: {
         id: firebaseUser.uid,
-        name: data?.name || firebaseUser.displayName || '',
-        email: data?.email || firebaseUser.email || '',
-        phone: data?.phone || '',
+        name: firebaseUser.displayName || '',
+        email: firebaseUser.email || '',
+        phone: firebaseUser.phoneNumber || '',
         createdAt: new Date(firebaseUser.metadata.creationTime || Date.now()),
       },
       isAuthenticated: true,
       isLoading: false,
     });
   } else {
-    console.log('🔐 No hay usuario autenticado, limpiando estado...');
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
