@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // TODAS LAS COLECCIONES
+    match /{collection}/{docId} {
+
+      // VIAJES publicados (Post Trips)
+      allow read: if collection == "Post Trips";
+      allow create: if request.auth != null && collection == "Post Trips";
+      allow update, delete: if request.auth != null &&
+        collection == "Post Trips" &&
+        request.auth.uid == resource.data.driverId;
+
+      // RESERVAS (Bookings) - CORREGIDO
+      allow create: if request.auth != null && collection == "Bookings";
+      // ✅ AGREGADO: Permitir que conductores lean reservas de sus viajes
+      allow read: if request.auth != null && collection == "Bookings" && (
+        request.auth.uid == resource.data.passengerId ||
+        exists(/databases/$(database)/documents/Post Trips/$(resource.data.tripId)) &&
+        get(/databases/$(database)/documents/Post Trips/$(resource.data.tripId)).data.driverId == request.auth.uid
+      );
+      allow update, delete: if request.auth != null &&
+        collection == "Bookings" &&
+        request.auth.uid == resource.data.passengerId;
+
+      // OFERTAS DE CONDUCTOR (Driver Offers) - CORREGIDO
+      allow create: if request.auth != null && collection == "Driver Offers";
+      // ✅ AGREGADO: Permitir que pasajeros lean ofertas para sus solicitudes
+      allow read: if request.auth != null && collection == "Driver Offers" && (
+        request.auth.uid == resource.data.driverId ||
+        exists(/databases/$(database)/documents/Passenger Requests/$(resource.data.requestId)) &&
+        get(/databases/$(database)/documents/Passenger Requests/$(resource.data.requestId)).data.passengerId == request.auth.uid
+      );
+      allow update, delete: if request.auth != null &&
+        collection == "Driver Offers" &&
+        request.auth.uid == resource.data.driverId;
+
+      // SOLICITUDES DE PASAJEROS (Passenger Requests)
+      allow read: if collection == "Passenger Requests";
+      allow create: if request.auth != null && collection == "Passenger Requests";
+      allow update, delete: if request.auth != null &&
+        collection == "Passenger Requests" &&
+        request.auth.uid == resource.data.passengerId;
+
+      // PERFILES DE USUARIO (users)
+      allow read, write: if request.auth != null &&
+        collection == "users" &&
+        request.auth.uid == docId;
+    }
+  }
+}
