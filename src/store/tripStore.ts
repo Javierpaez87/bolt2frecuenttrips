@@ -637,34 +637,56 @@ export const useTripStore = create<TripState>((set, get) => ({
   // ✅ FUNCIÓN ORIGINAL COMPLETA MANTENIDA
   fetchMyBookings: async () => {
     set({ isLoading: true, error: null });
+    
+    try {
+      const db = getFirestore();
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        console.log('⚠️ Usuario no autenticado en fetchMyBookings - esperando autenticación...');
+        set({ myBookings: [], isLoading: false });
+        return;
+      }
 
-    const auth = getAuth();
-    return new Promise<void>((resolve) => {
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          console.error('⚠️ Usuario no autenticado en fetchMyBookings');
-          set({ myBookings: [], error: 'Usuario no autenticado.', isLoading: false });
-          return resolve();
+      console.log('✅ Usuario autenticado en fetchMyBookings:', user.uid);
+      
+      const q = query(collection(db, 'Bookings'), where('passengerId', '==', user.uid));
+      const snapshot = await getDocs(q);
+
+      const bookings: Booking[] = [];
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data() as DocumentData;
+
+        let trip = null;
+        if (data.tripId) {
+          const tripRef = doc(db, 'Post Trips', data.tripId);
+          const tripSnap = await getDoc(tripRef);
+          if (tripSnap.exists()) {
+            const tripData = tripSnap.data();
+            trip = processFirestoreTrip(tripSnap, tripData);
+          }
         }
 
-        try {
-          const db = getFirestore();
-          const q = query(collection(db, 'Bookings'), where('passengerId', '==', user.uid));
-          const snapshot = await getDocs(q);
+        bookings.push({
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+          trip,
+        });
+      }
 
-          const bookings: Booking[] = [];
-
-          for (const docSnap of snapshot.docs) {
-            const data = docSnap.data() as DocumentData;
-
-            let trip = null;
-            if (data.tripId) {
-              const tripRef = doc(db, 'Post Trips', data.tripId);
-              const tripSnap = await getDoc(tripRef);
-              if (tripSnap.exists()) {
-                const tripData = tripSnap.data();
-                trip = processFirestoreTrip(tripSnap, tripData);
-              }
+      console.log('📦 fetchMyBookings completado:', bookings.length, 'reservas encontradas');
+      set({ myBookings: bookings, isLoading: false });
+    } catch (error) {
+      console.error('❌ Error en fetchMyBookings:', error);
+      set({
+        error: error instanceof Error ? error.message : 'Error al obtener reservas',
+        isLoading: false,
+      });
+    }
+  },
             }
 
             bookings.push({

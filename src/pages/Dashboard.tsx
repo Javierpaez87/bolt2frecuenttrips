@@ -88,15 +88,18 @@ const Dashboard: React.FC = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user) {
+      console.log('🎯 Dashboard: Usuario autenticado, cargando datos...', user.id);
       fetchMyTrips();
       fetchMyBookings();
       fetchBookingsForMyTrips();
       fetchMyPassengerRequests();
       fetchMyDriverOffers();
       fetchReceivedDriverOffers();
+    } else {
+      console.log('⏳ Dashboard: Esperando autenticación...', { isAuthenticated, hasUser: !!user });
     }
-  }, [isAuthenticated, fetchMyTrips, fetchMyBookings, fetchBookingsForMyTrips, fetchMyPassengerRequests, fetchMyDriverOffers, fetchReceivedDriverOffers]);
+  }, [isAuthenticated, user, fetchMyTrips, fetchMyBookings, fetchBookingsForMyTrips, fetchMyPassengerRequests, fetchMyDriverOffers, fetchReceivedDriverOffers]);
 
   const handleBookingUpdate = () => {
     fetchMyTrips();

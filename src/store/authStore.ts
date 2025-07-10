@@ -173,11 +173,20 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 // ✅ NUEVO: Escuchar cambios de sesión y cargar datos desde Firestore
 onAuthStateChanged(auth, async (firebaseUser) => {
+  console.log('🔐 onAuthStateChanged triggered:', firebaseUser ? 'Usuario encontrado' : 'No hay usuario');
+  
   if (firebaseUser) {
     const db = getFirestore();
     const userRef = doc(db, 'users', firebaseUser.uid);
     const snapshot = await getDoc(userRef);
     const data = snapshot.exists() ? snapshot.data() : {};
+
+    console.log('🔐 Datos del usuario cargados desde Firestore:', {
+      uid: firebaseUser.uid,
+      hasData: snapshot.exists(),
+      name: data?.name || firebaseUser.displayName,
+      email: data?.email || firebaseUser.email
+    });
 
     useAuthStore.setState({
       user: {
@@ -191,6 +200,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
       isLoading: false,
     });
   } else {
+    console.log('🔐 No hay usuario autenticado, limpiando estado...');
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
